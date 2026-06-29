@@ -35,11 +35,12 @@ vocabulary:
       source_vocabulary: "KCD7"
       concept_col: "condition_concept_id"
       source_concept_col: "condition_source_concept_id"
+      code_transform: "kcd7"   # A020|... → A02.0
     procedure:
-      source_col: "procedure_source_value"
-      source_vocabulary: "Korean Revenue Code"
-      concept_col: "procedure_concept_id"
-      source_concept_col: "procedure_source_concept_id"
+    # source_col: "procedure_source_value"
+    # source_vocabulary: "Korean Revenue Code"
+    # concept_col: "procedure_concept_id"
+    # source_concept_col: "procedure_source_concept_id"
     measurement:
       source_col: "measurement_source_value"
       source_vocabulary: "LOINC"

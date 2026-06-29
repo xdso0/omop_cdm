@@ -113,8 +113,9 @@ def maybe_map_standard(
     rule = cfg.vocab_mappings.get(domain)
     if not rule or mapper is None:
         return df
-    from ..mapping import apply_standard_mapping  # 지연 import (vocab 의존)
+    from ..mapping import apply_standard_mapping, CODE_TRANSFORMS  # 지연 import
 
+    transform = CODE_TRANSFORMS.get(rule.get("code_transform"))
     return apply_standard_mapping(
         df, mapper,
         domain=domain,
@@ -124,6 +125,7 @@ def maybe_map_standard(
         source_concept_col=rule["source_concept_col"],
         unmapped_dir=cfg.unmapped_root,
         used_concept_ids=used_concept_ids,
+        code_transform=transform,
     )
 
 
