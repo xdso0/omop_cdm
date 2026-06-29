@@ -57,15 +57,20 @@ def assign_occurrence_id(
     """
     out = df.sort_values(datetime_col, kind="stable").reset_index(drop=True)
 
-    d = pd.to_datetime(out[date_col])
+    # 채번 기준 날짜가 결측(NaT)인 행은 유효 ID 를 만들 수 없으므로 제외
+    d = pd.to_datetime(out[date_col], errors="coerce")
+    if not d.notna().all():
+        out = out[d.notna()].reset_index(drop=True)
+        d = pd.to_datetime(out[date_col], errors="coerce")
+
     # 같은 날짜가 연속될 때 1,2,3...; 날짜가 바뀌면 1로 리셋 (SAS lag 와 동일)
     same_as_prev = d.eq(d.shift())
     grp = (~same_as_prev).cumsum()
     seq = out.groupby(grp).cumcount() + 1
 
-    yy = (d.dt.year - 2000).map(lambda x: f"{x:02d}")
-    mm = d.dt.month.map(lambda x: f"{x:02d}")
-    dd = d.dt.day.map(lambda x: f"{x:02d}")
+    yy = (d.dt.year - 2000).astype(int).map(lambda x: f"{x:02d}")
+    mm = d.dt.month.astype(int).map(lambda x: f"{x:02d}")
+    dd = d.dt.day.astype(int).map(lambda x: f"{x:02d}")
     hosp = out[hosp_col].astype("Int64").astype(str)
     nn = seq.map(lambda x: f"{x:0{seq_width}d}")
 

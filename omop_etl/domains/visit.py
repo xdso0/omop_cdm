@@ -37,13 +37,17 @@ def build(
 
     # ---- 채번: hosp + YYMMDD + '01' + nn(5) ----
     b1 = b1.sort_values("visit_start_time", kind="stable").reset_index(drop=True)
-    d = pd.to_datetime(b1["visit_start_date"])
+    # 시작일 결측 행은 유효 ID 를 만들 수 없으므로 제외
+    _d = pd.to_datetime(b1["visit_start_date"], errors="coerce")
+    if not _d.notna().all():
+        b1 = b1[_d.notna()].reset_index(drop=True)
+    d = pd.to_datetime(b1["visit_start_date"], errors="coerce")
     grp = (~d.eq(d.shift())).cumsum()
     seq = b1.groupby(grp).cumcount() + 1
     nn = seq.map(lambda x: f"{x:05d}")
-    yy = (d.dt.year - 2000).map(lambda x: f"{x:02d}")
-    mm = d.dt.month.map(lambda x: f"{x:02d}")
-    dd = d.dt.day.map(lambda x: f"{x:02d}")
+    yy = (d.dt.year - 2000).astype(int).map(lambda x: f"{x:02d}")
+    mm = d.dt.month.astype(int).map(lambda x: f"{x:02d}")
+    dd = d.dt.day.astype(int).map(lambda x: f"{x:02d}")
     hosp = b1["hosp"].astype("Int64").astype(str)
     b1["_nn"], b1["_yy"], b1["_mm"], b1["_dd"] = nn, yy, mm, dd
     b1["visit_occurrence_id"] = (hosp + yy + mm + dd + "01" + nn).astype("int64")
