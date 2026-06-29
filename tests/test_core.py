@@ -12,7 +12,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from omop_etl.ids import assign_occurrence_id, filter_person_id_length
+from omop_etl.ids import assign_occurrence_id, filter_person_id_length, assign_ids_with_counter
 from omop_etl.visit_match import match_visit_two_pass, match_visit_single
 from omop_etl.person_filter import remove_after_death, keep_in_person_master
 from omop_etl.vocabulary import VocabStore
@@ -29,6 +29,21 @@ def test_occurrence_id():
     out = assign_occurrence_id(df, id_col="cid", datetime_col="condition_start_datetime",
                               date_col="condition_start_date", domain_code="02", seq_width=5)
     assert out["cid"].tolist() == [12003010200001, 12003010200002, 22003020200001]
+
+
+def test_ids_with_counter_streaming():
+    # 같은 날짜가 두 청크에 나뉘어 들어와도 일련번호가 이어져 ID 가 전역 유일해야 함
+    counter = {}
+    c1 = pd.DataFrame({"hosp": [1, 1], "measurement_date": pd.to_datetime(["2020-03-01", "2020-03-01"])})
+    c2 = pd.DataFrame({"hosp": [1, 2], "measurement_date": pd.to_datetime(["2020-03-01", "2020-03-02"])})
+    o1 = assign_ids_with_counter(c1, counter, id_col="mid", date_col="measurement_date",
+                                 domain_code="05", seq_width=6)
+    o2 = assign_ids_with_counter(c2, counter, id_col="mid", date_col="measurement_date",
+                                 domain_code="05", seq_width=6)
+    ids = o1["mid"].tolist() + o2["mid"].tolist()
+    assert len(set(ids)) == len(ids)                       # 전역 유일
+    assert o1["mid"].tolist() == [120030105000001, 120030105000002]
+    assert o2["mid"].iloc[0] == 120030105000003            # 청크 넘어 이어짐
 
 
 def test_person_id_length():

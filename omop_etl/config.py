@@ -55,6 +55,8 @@ class PipelineConfig:
     source_schema: str | None = None
     output_db: str | None = None      # 설정 시 CDM 을 DB 에 저장(SQLAlchemy URL)
     output_schema: str | None = None
+    stream_domains: list = field(default_factory=list)  # 청크 스트리밍으로 처리할 도메인
+    chunksize: int = 500_000
 
     def path(self, *parts: str) -> Path:
         return self.mapping_root.joinpath(*parts)
@@ -102,4 +104,6 @@ def load_config(path: str | Path | None = None) -> PipelineConfig:
         source_schema=paths.get("source_schema"),
         output_db=paths.get("output_db"),
         output_schema=paths.get("output_schema"),
+        stream_domains=raw.get("stream_domains", []),
+        chunksize=int(raw.get("chunksize", 500_000)),
     )

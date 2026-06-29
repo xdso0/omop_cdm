@@ -133,7 +133,20 @@ paths:
 - 빠른 테스트는 무설치 SQLite 도 가능: `sqlite:///C:/path/cdm.sqlite`
 - 필요 패키지: `SQLAlchemy`, 드라이버(PostgreSQL=`psycopg2-binary`).
 
-> 대용량 DB 입출력은 청크 읽기(`read_db_chunks`)·청크 쓰기(`to_sql chunksize`)를 사용한다.
+### 초대용량 — 청크 스트리밍
+
+합치면 RAM 을 넘는 도메인(예: measurement)은 **소스를 청크로 읽어 처리하고 출력에
+증분 저장**한다(전체를 메모리에 올리지 않음). 채번은 날짜별 카운터로 청크를 넘어
+이어져 PK 가 전역 유일하다.
+
+```yaml
+stream_domains: ["measurement"]   # 스트리밍으로 처리할 도메인
+chunksize: 500000                 # 청크 크기(행)
+```
+
+- DB 입력은 `read_db_chunks`, 파일은 `read_sas_chunks` 로 청크 읽기.
+- 출력은 DB append(첫 청크 replace) 또는 CSV append 로 증분 저장.
+- 메모리 상주분은 visit 룩업·person/death 마스터·현재 청크뿐 → 원천 크기와 무관하게 동작.
 
 ## 7. 공통 ETL 패턴
 

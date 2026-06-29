@@ -135,6 +135,8 @@ def match_visit_two_pass(
     """
     ev = events.reset_index(drop=True).copy()
     ev["_ev"] = np.arange(len(ev))
+    if provider_col not in ev.columns:   # provider 정보 없으면 비매칭으로 처리
+        ev[provider_col] = np.nan
 
     vis = _dedup_visits(visits, person_col=person_col, with_provider=True)
     vis = vis.rename(columns={provider_col: "_v_provider"})

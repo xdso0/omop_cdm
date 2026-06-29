@@ -148,10 +148,19 @@ def run(cfg: PipelineConfig, domains: list[str], provider_xlsx: str | None,
             _save(cfg, df, "note")
 
         elif dom == "measurement":
-            df, _ = measurement.build(cfg, need("person"), need("death"), need("visit"),
-                                      person_id_xlsx=_pid_xlsx(cfg, "measurement"),
-                                      mapper=mapper, used_concept_ids=used_concept_ids)
-            _save(cfg, df, "measurement")
+            if "measurement" in cfg.stream_domains:
+                # 초대용량: 청크 스트리밍 + 증분 저장(메모리 통째 적재 안 함)
+                from omop_etl.streaming import build_measurement_stream
+                n = build_measurement_stream(
+                    cfg, need("person"), need("death"), need("visit"),
+                    person_id_xlsx=_pid_xlsx(cfg, "measurement"),
+                    mapper=mapper, used_concept_ids=used_concept_ids, chunksize=cfg.chunksize)
+                print(f"  저장(스트리밍): measurement  ({n:,} rows)")
+            else:
+                df, _ = measurement.build(cfg, need("person"), need("death"), need("visit"),
+                                          person_id_xlsx=_pid_xlsx(cfg, "measurement"),
+                                          mapper=mapper, used_concept_ids=used_concept_ids)
+                _save(cfg, df, "measurement")
 
         else:
             print(f"  (알 수 없는 도메인: {dom} — 건너뜀)")

@@ -72,6 +72,44 @@ def assign_occurrence_id(
     return out
 
 
+def assign_ids_with_counter(
+    df: pd.DataFrame,
+    counter: dict,
+    *,
+    id_col: str,
+    date_col: str,
+    hosp_col: str = "hosp",
+    domain_code: str,
+    seq_width: int = 6,
+) -> pd.DataFrame:
+    """스트리밍(청크) 채번. 날짜별 카운터(``counter``)를 청크 사이에 누적해
+
+    청크를 넘나들어도 같은 날짜 안에서 일련번호가 이어지도록(=전역 유일) 한다.
+    ``counter`` 는 호출자가 유지하는 dict(날짜→지금까지 발급 수). 제자리 갱신된다.
+    """
+    out = df.reset_index(drop=True)
+    d = pd.to_datetime(out[date_col], errors="coerce")
+    keep = d.notna()
+    if not keep.all():
+        out = out[keep].reset_index(drop=True)
+        d = pd.to_datetime(out[date_col], errors="coerce")
+    dates = d.dt.normalize()
+
+    base = dates.map(lambda x: counter.get(x, 0))          # 청크 진입 시점의 누적값
+    within = out.groupby(dates, sort=False).cumcount() + 1  # 청크 내 순번
+    seq = (base.values + within.values)
+    for dv, c in dates.value_counts().items():             # 카운터 누적 갱신
+        counter[dv] = counter.get(dv, 0) + int(c)
+
+    yy = (d.dt.year - 2000).astype(int).map(lambda x: f"{x:02d}")
+    mm = d.dt.month.astype(int).map(lambda x: f"{x:02d}")
+    dd = d.dt.day.astype(int).map(lambda x: f"{x:02d}")
+    hosp = out[hosp_col].astype("Int64").astype(str)
+    nn = pd.Series(seq).map(lambda x: f"{x:0{seq_width}d}")
+    out[id_col] = (hosp.values + yy.values + mm.values + dd.values + domain_code + nn.values).astype("int64")
+    return out
+
+
 def assign_visit_cost_id(
     df: pd.DataFrame,
     *,
