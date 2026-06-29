@@ -140,7 +140,40 @@ python scripts/run_pipeline.py --config input/sample/pipeline.sample.yaml \
 | measurement | `domains/measurement.py` | `measurement/measurement_join.sas` |
 | (검사 raw 전처리) | `preprocessing/measurement_lab.py` | `measurement/<버전>/script/*.sas` 수백 개 |
 
-## 8. 비고 / 한계
+## 8. 검증 (결과가 잘 만들어졌는지 확인)
+
+세 가지 방법으로 확인한다.
+
+**(1) 데이터 품질(QC) 검증** — 산출물이 OMOP 규칙을 지키는지
+
+```bash
+python scripts/validate_cdm.py --config config/pipeline.yaml
+```
+점검: PK 유일성·결측, person/visit 외래키 정합성, 표준 concept 매핑률,
+날짜 범위·사망일 이후 사건, 시작≤종료. ERROR 가 있으면 종료코드 1.
+
+**(2) 원본 SAS 결과와 대조** — Python 포팅이 기존 결과를 재현하는지
+
+```bash
+python scripts/compare_with_sas.py \
+    --python output/condition_occurrence.parquet \
+    --sas    <원본>/condition_occurrence.sas7bdat \
+    --keys person_id condition_occurrence_id \
+    --concept condition_concept_id --date condition_start_date
+```
+행 수, 키 교집합/차집합, concept 분포 차이, 날짜 범위를 비교한다.
+
+**(3) 핵심 로직 단위 테스트**
+
+```bash
+python tests/test_core.py        # 또는: pytest
+```
+채번·방문매칭·사망/마스터 필터·표준매핑이 기대값을 내는지 검증.
+
+> 권장 순서: 단위 테스트 → 샘플(`input/sample`)로 파이프라인+QC 통과 확인 →
+> 실제 데이터로 도메인 빌드 후 QC → 핵심 도메인은 SAS 결과와 대조.
+
+## 9. 비고 / 한계
 
 - 원본의 검사항목 전처리(`measurement/<버전>/script/`)는 코드값만 다른 동일
   템플릿 수백 개였다. 이를 **단일 함수 + 코드 리스트**(`preprocessing/measurement_lab.py`)로
