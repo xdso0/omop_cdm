@@ -50,6 +50,11 @@ class PipelineConfig:
     used_vocab_root: Path | None = None
     vocab_cache_root: Path | None = None
     vocab_mappings: dict[str, dict[str, Any]] = field(default_factory=dict)
+    # --- DB 입출력 (선택) ---
+    source_db: str | None = None      # 설정 시 소스를 DB 테이블에서 읽음(SQLAlchemy URL)
+    source_schema: str | None = None
+    output_db: str | None = None      # 설정 시 CDM 을 DB 에 저장(SQLAlchemy URL)
+    output_schema: str | None = None
 
     def path(self, *parts: str) -> Path:
         return self.mapping_root.joinpath(*parts)
@@ -93,4 +98,8 @@ def load_config(path: str | Path | None = None) -> PipelineConfig:
         used_vocab_root=_p("used_vocab_root", output_root / "used_vocab"),
         vocab_cache_root=_p("vocab_cache_root", output_root / "_vocab_cache"),
         vocab_mappings=vocab.get("mappings", {}),
+        source_db=paths.get("source_db"),
+        source_schema=paths.get("source_schema"),
+        output_db=paths.get("output_db"),
+        output_schema=paths.get("output_schema"),
     )

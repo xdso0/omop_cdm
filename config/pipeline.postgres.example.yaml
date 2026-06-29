@@ -1,0 +1,99 @@
+# PostgreSQL 입출력 예시 설정 (DB→코드→DB)
+#
+# 사용법: 이 파일을 복사해 실제 접속정보로 채운 뒤(비밀번호 포함되므로 *.local.yaml
+#         로 저장하면 .gitignore 에 의해 커밋 제외됨), 다음과 같이 실행한다.
+#   python scripts/run_pipeline.py --config config/pipeline.postgres.local.yaml \
+#          --domains person death visit condition procedure
+#
+# - source_db 가 설정되면 소스를 DB 테이블에서 읽는다(테이블명 = 각 도메인 sources 의 dataset).
+# - output_db 가 설정되면 생성한 CDM 테이블을 DB 에 저장한다(같은 이름으로 replace).
+# - 배치가 여러 개면 dataset 을 서로 다른 테이블명으로 지정한다.
+
+paths:
+  # 소스/출력 DB (SQLAlchemy URL)
+  source_db: "postgresql+psycopg2://USER:PASSWORD@localhost:5432/SOURCE_DB"
+  source_schema: "src"          # 소스 테이블이 있는 스키마(없으면 생략)
+  output_db: "postgresql+psycopg2://USER:PASSWORD@localhost:5432/CDM_DB"
+  output_schema: "cdm"          # CDM 테이블을 저장할 스키마
+
+  # 파일 입력을 함께 쓸 때만 의미(person_id.xlsx 등 보조 테이블 위치)
+  mapping_root: "D:/g/mappingTable"
+  output_root: "D:/g/cdm_output" # output_db 가 있으면 파일 저장은 생략됨
+  output_format: "csv"
+
+  # Athena vocabulary (CSV 추출본)
+  vocab_root: "D:/g/vocab/260430"
+  unmapped_root: "D:/g/cdm_output/unmapped"
+  used_vocab_root: "D:/g/cdm_output/used_vocab"
+  vocab_cache_root: "D:/g/cdm_output/_vocab_cache"
+
+sas_encoding: "euc-kr"
+cutoff_year: 2026
+
+vocabulary:
+  athena_release: "260430"
+  mappings:
+    condition:
+      source_col: "condition_source_value"
+      source_vocabulary: "KCD7"
+      concept_col: "condition_concept_id"
+      source_concept_col: "condition_source_concept_id"
+      code_transform: "kcd7"
+    measurement:
+      source_col: "measurement_source_value"
+      source_vocabulary: "LOINC"
+      concept_col: "measurement_concept_id"
+      source_concept_col: "measurement_source_concept_id"
+
+# DB 사용 시 sources 의 dataset = 읽어올 테이블명 (folder 는 비워둠)
+domains:
+  person:
+    domain_code: "00"
+    sources:
+      - {folder: "", dataset: "person"}
+  death:
+    domain_code: "-"
+    sources:
+      - {folder: "", dataset: "death"}
+  visit:
+    domain_code: "01"
+    seq_width: 5
+    sources:
+      - {folder: "", dataset: "visit_occurrence_full"}
+  condition:
+    domain_code: "02"
+    seq_width: 5
+    visit_match: {window_pre_days: 0, order_by_diff: false, null_9203_pass2: false}
+    sources:
+      - {folder: "", dataset: "condition_occurrence"}
+  procedure:
+    domain_code: "04"
+    seq_width: 6
+    sources:
+      - {folder: "", dataset: "procedure"}
+  drug:
+    domain_code: "03"
+    seq_width: 5
+    visit_match: {window_pre_days: 0, order_by_diff: false, null_9203_pass2: true}
+    sources:
+      - {folder: "", dataset: "drug_step01"}
+  measurement:
+    domain_code: "05"
+    seq_width: 6
+    visit_match: {window_pre_days: 7, order_by_diff: true, null_9203_pass2: true}
+    sources:
+      - {folder: "", dataset: "measurement"}
+  observation:
+    domain_code: "06"
+    seq_width: 5
+    sources:
+      - {folder: "", dataset: "observation_exam", options: {group: "exam"}}
+      - {folder: "", dataset: "observation_inpatient", options: {group: "inpatient"}}
+  note:
+    domain_code: "09"
+    seq_width: 6
+    cutoff_start: "2001-01-01"
+    cutoff_end: "2025-12-31"
+    visit_match: {window_pre_days: 7, order_by_diff: true, null_9203_pass2: true}
+    sources:
+      - {folder: "", dataset: "note"}

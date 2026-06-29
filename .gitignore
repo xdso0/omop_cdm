@@ -72,3 +72,7 @@ config/*.local.yaml
 # 단, vocab 매핑 캐시(재생성 가능)는 제외
 output_example/_vocab_cache/
 input/sample/**/_vocab_cache/
+
+# DB 테스트 산출물
+output_example/_dbtest/
+*.sqlite

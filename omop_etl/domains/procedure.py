@@ -41,6 +41,8 @@ def build(
 
     # Athena 표준 매핑
     a = maybe_map_standard(a, cfg, "procedure", mapper, used_concept_ids)
+    if "procedure_concept_id" not in a.columns:   # 매핑 비활성 + 원천에 없으면
+        a["procedure_concept_id"] = 0
     a["procedure_concept_id"] = a["procedure_concept_id"].fillna(0)
     a = assign_occurrence_id(
         a,

@@ -8,7 +8,7 @@ from __future__ import annotations
 import pandas as pd
 
 from ..config import DomainConfig, PipelineConfig, Source
-from ..io import read_sas, downcast_integers
+from ..io import read_sas, downcast_integers, read_db, get_engine
 
 import pandas as _pd
 
@@ -162,15 +162,23 @@ def load_sources(
         if group is not None and (src.options or {}).get("group") != group:
             continue
         cols = _source_usecols(usecols, src.options or {})
-        sas_path = cfg.path(src.folder, f"{src.dataset}.sas7bdat")
-        csv_path = cfg.path(src.folder, f"{src.dataset}.csv")
-        if sas_path.exists():
-            df = read_sas(sas_path, encoding=cfg.sas_encoding, usecols=cols)
-        elif csv_path.exists():
-            # 입력 템플릿(예시) 또는 CSV 원천 대비 폴백
-            df = _pd.read_csv(csv_path)
+        if cfg.source_db:
+            # DB 입력: 테이블명 = dataset, 스키마 = source_schema (배치별로 다른
+            # 테이블이면 dataset 을 고유 이름으로 지정).
+            df = read_db(src.dataset, get_engine(cfg.source_db),
+                         schema=cfg.source_schema, usecols=cols)
         else:
-            raise FileNotFoundError(f"원천 없음: {sas_path} (또는 .csv)")
+            sas_path = cfg.path(src.folder, f"{src.dataset}.sas7bdat")
+            csv_path = cfg.path(src.folder, f"{src.dataset}.csv")
+            xlsx_path = cfg.path(src.folder, f"{src.dataset}.xlsx")
+            if sas_path.exists():
+                df = read_sas(sas_path, encoding=cfg.sas_encoding, usecols=cols)
+            elif csv_path.exists():
+                df = _pd.read_csv(csv_path)
+            elif xlsx_path.exists():
+                df = _pd.read_excel(xlsx_path)         # Excel 입력
+            else:
+                raise FileNotFoundError(f"원천 없음: {sas_path} (.csv/.xlsx 도 없음)")
         df = _normalize_columns(df)          # 컬럼명 소문자 통일 (케이스 불일치 방지)
         df = _apply_options(df, src, encoding=cfg.sas_encoding)
         frames.append(df)

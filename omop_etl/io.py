@@ -142,12 +142,62 @@ def read_table(path: str | Path, **kw) -> pd.DataFrame:
 
 
 # --------------------------------------------------------------------- #
-# 쓰기
+# DB 입출력 (SQLAlchemy)
+# --------------------------------------------------------------------- #
+_ENGINES: dict = {}
+
+
+def get_engine(url: str):
+    """SQLAlchemy 엔진을 URL 별로 캐시해 반환.
+
+    예) PostgreSQL: ``postgresql+psycopg2://user:pw@host:5432/dbname``
+        SQLite    : ``sqlite:///C:/path/to/db.sqlite``
+    """
+    if url not in _ENGINES:
+        from sqlalchemy import create_engine
+        _ENGINES[url] = create_engine(url)
+    return _ENGINES[url]
+
+
+def read_db(table: str, engine, *, schema: str | None = None, usecols=None) -> pd.DataFrame:
+    """DB 테이블을 DataFrame 으로 읽는다(필요 컬럼만 SELECT, 대소문자 무관)."""
+    from sqlalchemy import inspect, text
+    actual = [c["name"] for c in inspect(engine).get_columns(table, schema=schema)]
+    if usecols:
+        want = {c.lower() for c in usecols}
+        actual = [c for c in actual if c.lower() in want] or actual
+    qcols = ", ".join(f'"{c}"' for c in actual)
+    fq = f'"{schema}"."{table}"' if schema else f'"{table}"'
+    return pd.read_sql_query(text(f"SELECT {qcols} FROM {fq}"), engine)
+
+
+def read_db_chunks(table: str, engine, *, schema: str | None = None,
+                   usecols=None, chunksize: int = 500_000):
+    """DB 테이블을 청크 단위로 읽는다(대용량)."""
+    from sqlalchemy import inspect, text
+    actual = [c["name"] for c in inspect(engine).get_columns(table, schema=schema)]
+    if usecols:
+        want = {c.lower() for c in usecols}
+        actual = [c for c in actual if c.lower() in want] or actual
+    qcols = ", ".join(f'"{c}"' for c in actual)
+    fq = f'"{schema}"."{table}"' if schema else f'"{table}"'
+    yield from pd.read_sql_query(text(f"SELECT {qcols} FROM {fq}"), engine, chunksize=chunksize)
+
+
+def write_db(df: pd.DataFrame, table: str, engine, *, schema: str | None = None,
+             if_exists: str = "append", chunksize: int = 50_000) -> None:
+    """DataFrame 을 DB 테이블에 저장한다."""
+    df.to_sql(table, engine, schema=schema, if_exists=if_exists, index=False,
+              chunksize=chunksize, method="multi")
+
+
+# --------------------------------------------------------------------- #
+# 쓰기 (파일)
 # --------------------------------------------------------------------- #
 def write_cdm(df: pd.DataFrame, path: str | Path, *, fmt: str = "parquet") -> Path:
-    """CDM 테이블을 저장한다.
+    """CDM 테이블을 파일로 저장한다.
 
-    기본은 parquet (대용량·타입 보존). ``fmt='csv'`` 도 가능.
+    기본은 parquet (대용량·타입 보존). ``fmt='csv'``, ``fmt='xlsx'`` 도 가능.
     """
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
@@ -157,6 +207,9 @@ def write_cdm(df: pd.DataFrame, path: str | Path, *, fmt: str = "parquet") -> Pa
     elif fmt == "csv":
         out = p.with_suffix(".csv")
         df.to_csv(out, index=False, encoding="utf-8-sig")
+    elif fmt in ("xlsx", "excel"):
+        out = p.with_suffix(".xlsx")
+        df.to_excel(out, index=False)
     elif fmt == "sas7bdat":
         if pyreadstat is None:
             raise ImportError("pyreadstat 가 필요합니다.")

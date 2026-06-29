@@ -108,7 +108,34 @@ python scripts/run_pipeline.py --config input/sample/pipeline.sample.yaml \
        --domains person death visit condition procedure
 ```
 
-## 6. 공통 ETL 패턴
+## 6. 입출력 형태 (DB / Excel / 파일)
+
+원천과 산출 위치는 설정만 바꾸면 된다. SAS 없이 **DB→DB, Excel→Excel** 모두 가능하다.
+
+**입력** (도메인 `sources` 의 `dataset` = 테이블/파일 이름)
+- DB: `paths.source_db` 에 SQLAlchemy URL 지정 → 테이블에서 읽음
+- 파일: `paths.mapping_root` 아래 `<folder>/<dataset>.{sas7bdat|csv|xlsx}` (자동 인식)
+
+**출력**
+- DB: `paths.output_db` 지정 → CDM 테이블을 DB 에 저장(같은 이름 replace)
+- 파일: `output_db` 미지정 시 `output_root` 에 `output_format`(`parquet|csv|xlsx`)로 저장
+
+```yaml
+paths:
+  source_db: "postgresql+psycopg2://user:pw@localhost:5432/source_db"
+  source_schema: "src"
+  output_db: "postgresql+psycopg2://user:pw@localhost:5432/cdm_db"
+  output_schema: "cdm"
+```
+
+- PostgreSQL 예시: [`config/pipeline.postgres.example.yaml`](config/pipeline.postgres.example.yaml)
+  (실제 접속정보는 `*.local.yaml` 로 저장하면 커밋에서 제외됨)
+- 빠른 테스트는 무설치 SQLite 도 가능: `sqlite:///C:/path/cdm.sqlite`
+- 필요 패키지: `SQLAlchemy`, 드라이버(PostgreSQL=`psycopg2-binary`).
+
+> 대용량 DB 입출력은 청크 읽기(`read_db_chunks`)·청크 쓰기(`to_sql chunksize`)를 사용한다.
+
+## 7. 공통 ETL 패턴
 
 모든 도메인이 동일한 골격을 따른다:
 
@@ -123,7 +150,7 @@ python scripts/run_pipeline.py --config input/sample/pipeline.sample.yaml \
 
 도메인별 채번 코드 / 방문 매칭 규칙은 [`docs/mapping_logic.md`](docs/mapping_logic.md) 참조.
 
-## 7. 도메인 ↔ 모듈 ↔ 생성 테이블
+## 8. 도메인 ↔ 모듈 ↔ 생성 테이블
 
 | 도메인 | Python 모듈 | 생성 CDM 테이블 |
 |--------|-------------|-----------------|
@@ -140,7 +167,7 @@ python scripts/run_pipeline.py --config input/sample/pipeline.sample.yaml \
 | measurement | `domains/measurement.py` | measurement |
 | (검사 raw 전처리) | `preprocessing/measurement_lab.py` | measurement 입력 생성 |
 
-## 8. 검증 (결과가 잘 만들어졌는지 확인)
+## 9. 검증 (결과가 잘 만들어졌는지 확인)
 
 세 가지 방법으로 확인한다.
 
@@ -173,7 +200,7 @@ python tests/test_core.py        # 또는: pytest
 > 권장 순서: 단위 테스트 → 샘플(`input/sample`)로 파이프라인+QC 통과 확인 →
 > 실제 데이터로 도메인 빌드 후 QC → (있으면) 기존 산출물과 대조.
 
-## 9. 데이터 생성 한계
+## 10. 데이터 생성 한계
 
 이 코드로 CDM 데이터를 **생성할 때** 본질적으로 존재하는 한계다. 결과를 해석·활용할
 때 아래를 감안해야 한다.

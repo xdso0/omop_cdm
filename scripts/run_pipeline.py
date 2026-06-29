@@ -23,7 +23,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from omop_etl.config import PipelineConfig, load_config  # noqa: E402
-from omop_etl.io import write_cdm  # noqa: E402
+from omop_etl.io import write_cdm, write_db, get_engine  # noqa: E402
 from omop_etl.vocabulary import VocabStore, export_used_vocab  # noqa: E402
 from omop_etl.domains import (  # noqa: E402
     care_site,
@@ -60,8 +60,14 @@ def _pid_xlsx(cfg: PipelineConfig, domain: str) -> Path:
 
 
 def _save(cfg: PipelineConfig, df, name: str) -> None:
-    out = write_cdm(df, cfg.output_root / name, fmt=cfg.output_format)
-    print(f"  저장: {name}  ({len(df):,} rows) → {out}")
+    if cfg.output_db:
+        # 같은 CDM 테이블을 재실행 시 교체(replace), 그 외 도메인 산출은 append
+        write_db(df, name, get_engine(cfg.output_db), schema=cfg.output_schema,
+                 if_exists="replace")
+        print(f"  저장(DB): {name}  ({len(df):,} rows) → {cfg.output_schema or ''}.{name}")
+    else:
+        out = write_cdm(df, cfg.output_root / name, fmt=cfg.output_format)
+        print(f"  저장: {name}  ({len(df):,} rows) → {out}")
 
 
 def run(cfg: PipelineConfig, domains: list[str], provider_xlsx: str | None,
