@@ -112,9 +112,15 @@ def maybe_map_standard(
     rule = cfg.vocab_mappings.get(domain)
     if not rule or mapper is None:
         return df
-    from ..mapping import apply_standard_mapping, CODE_TRANSFORMS  # 지연 import
+    from ..mapping import apply_standard_mapping, CODE_TRANSFORMS, load_supplement  # 지연 import
 
     transform = CODE_TRANSFORMS.get(rule.get("code_transform"))
+    supp = None
+    if rule.get("supplement"):
+        from pathlib import Path as _P
+        sp = _P(rule["supplement"])
+        if sp.exists():
+            supp = load_supplement(sp)
     return apply_standard_mapping(
         df, mapper,
         domain=domain,
@@ -125,6 +131,7 @@ def maybe_map_standard(
         unmapped_dir=cfg.unmapped_root,
         used_concept_ids=used_concept_ids,
         code_transform=transform,
+        supplement=supp,
     )
 
 

@@ -85,6 +85,13 @@ concept 만** 사용한다 (`omop_etl/vocabulary.py`).
   - procedure·drug 의 수가/EDI 코드는 대응 표준 vocabulary 가 없어 자동 매핑하지 않는다(9절 참조).
 - **미매핑 코드**는 후속 작업용으로 `paths.unmapped_root` 에 저장
   (`<domain>_unmapped.csv`: 코드 / source_concept_id / 건수).
+- **보완 매핑**: Athena 로 안 되는 코드는 사용자 매핑표(`코드,concept_id` CSV/xlsx)를
+  Athena 위에 얹어 채운다. config 에 `supplement: 경로` 추가 → 미매핑(=0)만 보완.
+  ```yaml
+  condition:
+    ...
+    supplement: "config/supplement_condition.csv"   # source_code,concept_id
+  ```
 - **사용한 vocabulary** 는 `paths.used_vocab_root` 에 CONCEPT/CONCEPT_RELATIONSHIP/
   VOCABULARY 서브셋으로 정리 → 그대로 **DB 에 적재**해 CDM 과 조인.
 
@@ -198,16 +205,23 @@ python scripts/validate_cdm.py --config config/pipeline.yaml
 점검: PK 유일성·결측, person/visit 외래키 정합성, 표준 concept 매핑률,
 날짜 범위·사망일 이후 사건, 시작≤종료. ERROR 가 있으면 종료코드 1.
 
-**(2) 기존 산출물과 대조 (선택)** — 비교 기준이 될 기존 CDM 산출물(`.sas7bdat`/csv)이
-있으면 행 수·키·concept 분포·날짜 범위를 대조해 차이를 점검할 수 있다.
+**(2) 기존 CDM 과 대조 + 매핑 갭 리포트** — 기존(예: DB 에 적재된) CDM 과 자연키로
+비교하고, source_value 별 매핑 갭을 뽑는다. (occurrence_id 는 surrogate 라 자연키로 비교)
 
 ```bash
-python scripts/compare_with_sas.py \
-    --python output/condition_occurrence.parquet \
-    --sas    <기존산출물>/condition_occurrence.sas7bdat \
-    --keys person_id condition_occurrence_id \
-    --concept condition_concept_id --date condition_start_date
+python scripts/compare_cdm.py --config config/pipeline.postgres.local.yaml \
+    --domain condition \
+    --base-url postgresql+psycopg2://u:p@host:5432/olddb --base-schema sas \
+    --base-table condition_occurrence
 ```
+출력: 자연키 공통/차집합, source_value 별 매핑 일치율, 그리고 갭 CSV —
+`<domain>_python_missing.csv`(기존엔 있는데 Python 이 0 → **보완표 채울 후보**),
+`<domain>_common_unmapped.csv`(양쪽 다 0 → 신규 매핑 필요).
+
+> **검증·보완 루프**: ① 파이프라인 실행 → ② `compare_cdm` 로 갭 추출 →
+> ③ `python_missing.csv` 를 보완표(`supplement`)로 채움 → ④ 재실행 → ⑤ 다시 비교해 개선 확인.
+
+(파일끼리 단순 대조는 `compare_with_sas.py` 도 사용 가능)
 
 **(3) 핵심 로직 단위 테스트**
 

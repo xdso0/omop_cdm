@@ -44,6 +44,7 @@ def apply_standard_mapping(
     unmapped_dir: str | Path | None = None,
     used_concept_ids: set | None = None,
     code_transform=None,
+    supplement: dict | None = None,
 ) -> pd.DataFrame:
     """``source_col`` 의 원천 코드를 Athena 표준 concept 로 매핑한다.
 
@@ -71,6 +72,14 @@ def apply_standard_mapping(
     df[concept_col] = key.map(lut["concept_id"]).fillna(0).astype("int64")
     df[source_concept_col] = key.map(lut["source_concept_id"]).fillna(0).astype("int64")
 
+    # 보완(supplement): Athena 로 못 채운(=0) 코드를 사용자 매핑표로 채움
+    if supplement:
+        m = df[concept_col].eq(0)
+        if m.any():
+            filled = key[m].map(supplement)
+            df.loc[m, concept_col] = filled.where(filled.notna(), 0).astype("int64").values
+            mapped["mapped"] = mapped["mapped"] | mapped["source_code"].isin(supplement)
+
     # 미매핑 저장 (후속 작업용)
     unmapped = mapped[~mapped["mapped"]].copy()
     if unmapped_dir is not None and len(unmapped):
@@ -85,5 +94,23 @@ def apply_standard_mapping(
     if used_concept_ids is not None:
         used_concept_ids.update(int(c) for c in mapped["concept_id"] if c)
         used_concept_ids.update(int(c) for c in mapped["source_concept_id"] if c)
+        if supplement:
+            used_concept_ids.update(int(c) for c in supplement.values() if c)
 
     return df
+
+
+def load_supplement(path: str | Path) -> dict:
+    """사용자 보완 매핑표를 dict(코드→concept_id) 로 읽는다.
+
+    파일 컬럼: 첫 컬럼=코드(source_code, 변환 후 코드 형식), 둘째 컬럼=concept_id.
+    csv/xlsx 지원.
+    """
+    p = Path(path)
+    if p.suffix.lower() in (".xlsx", ".xls"):
+        t = pd.read_excel(p)
+    else:
+        t = pd.read_csv(p)
+    code_col, concept_col = t.columns[0], t.columns[1]
+    t = t.dropna(subset=[code_col, concept_col])
+    return {str(k): int(v) for k, v in zip(t[code_col], pd.to_numeric(t[concept_col], errors="coerce").dropna())}
