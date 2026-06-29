@@ -110,6 +110,32 @@ def assign_ids_with_counter(
     return out
 
 
+def assign_id(
+    a: pd.DataFrame,
+    id_counter: dict | None,
+    *,
+    id_col: str,
+    datetime_col: str,
+    date_col: str,
+    hosp_col: str = "hosp",
+    domain_code: str,
+    seq_width: int,
+) -> pd.DataFrame:
+    """채번 방식 선택: 일반(in-memory) 또는 스트리밍 카운터.
+
+    ``id_counter`` 가 None 이면 전체 채번(:func:`assign_occurrence_id`),
+    dict 면 청크 스트리밍 채번(:func:`assign_ids_with_counter`).
+    두 방식 모두 같은 형식의 유일한 ID 를 만든다.
+    """
+    if id_counter is None:
+        return assign_occurrence_id(
+            a, id_col=id_col, datetime_col=datetime_col, date_col=date_col,
+            hosp_col=hosp_col, domain_code=domain_code, seq_width=seq_width)
+    return assign_ids_with_counter(
+        a, id_counter, id_col=id_col, date_col=date_col,
+        hosp_col=hosp_col, domain_code=domain_code, seq_width=seq_width)
+
+
 def assign_visit_cost_id(
     df: pd.DataFrame,
     *,

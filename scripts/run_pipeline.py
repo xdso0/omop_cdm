@@ -25,6 +25,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from omop_etl.config import PipelineConfig, load_config  # noqa: E402
 from omop_etl.io import write_cdm, write_db, get_engine  # noqa: E402
 from omop_etl.vocabulary import VocabStore, export_used_vocab  # noqa: E402
+from omop_etl.streaming import EVENT_TABLE  # noqa: E402
 from omop_etl.domains import (  # noqa: E402
     care_site,
     condition,
@@ -120,47 +121,28 @@ def run(cfg: PipelineConfig, domains: list[str], provider_xlsx: str | None,
             _save(cfg, res["payer_plan_period"], "payer_plan_period")
             _save(cfg, res["visit_cost"], "visit_cost")
 
-        elif dom == "condition":
-            df, _ = condition.build(cfg, need("person"), need("death"), need("visit"),
-                                    person_id_xlsx=_pid_xlsx(cfg, "condition"),
-                                    mapper=mapper, used_concept_ids=used_concept_ids)
-            _save(cfg, df, "condition_occurrence")
-
-        elif dom == "drug":
-            df, _ = drug.build(cfg, need("person"), need("death"), need("visit"),
-                               person_id_xlsx=_pid_xlsx(cfg, "drug"))
-            _save(cfg, df, "drug_exposure")
-
-        elif dom == "procedure":
-            df, _ = procedure.build(cfg, need("person"), need("death"),
-                                    person_id_xlsx=_pid_xlsx(cfg, "procedure"),
-                                    mapper=mapper, used_concept_ids=used_concept_ids)
-            _save(cfg, df, "procedure_occurrence")
+        elif dom in EVENT_TABLE:
+            # 이벤트 도메인: stream_domains 에 있으면 청크 스트리밍, 아니면 in-memory
+            if dom in cfg.stream_domains:
+                from omop_etl.streaming import build_event_stream
+                n = build_event_stream(
+                    cfg, dom, need("person"), need("death"), need("visit"),
+                    person_id_xlsx=_pid_xlsx(cfg, dom),
+                    mapper=mapper, used_concept_ids=used_concept_ids, chunksize=cfg.chunksize)
+                print(f"  저장(스트리밍): {EVENT_TABLE[dom]}  ({n:,} rows)")
+            else:
+                builder = {"condition": condition.build, "drug": drug.build,
+                           "procedure": procedure.build, "note": note.build,
+                           "measurement": measurement.build}[dom]
+                df, _ = builder(cfg, need("person"), need("death"), need("visit"),
+                                person_id_xlsx=_pid_xlsx(cfg, dom),
+                                mapper=mapper, used_concept_ids=used_concept_ids)
+                _save(cfg, df, EVENT_TABLE[dom])
 
         elif dom == "observation":
             df, _ = observation.build(cfg, need("person"), need("death"), need("visit"),
                                       person_id_xlsx=_pid_xlsx(cfg, "observation"))
             _save(cfg, df, "observation")
-
-        elif dom == "note":
-            df, _ = note.build(cfg, need("person"), need("death"), need("visit"),
-                               person_id_xlsx=_pid_xlsx(cfg, "note"))
-            _save(cfg, df, "note")
-
-        elif dom == "measurement":
-            if "measurement" in cfg.stream_domains:
-                # 초대용량: 청크 스트리밍 + 증분 저장(메모리 통째 적재 안 함)
-                from omop_etl.streaming import build_measurement_stream
-                n = build_measurement_stream(
-                    cfg, need("person"), need("death"), need("visit"),
-                    person_id_xlsx=_pid_xlsx(cfg, "measurement"),
-                    mapper=mapper, used_concept_ids=used_concept_ids, chunksize=cfg.chunksize)
-                print(f"  저장(스트리밍): measurement  ({n:,} rows)")
-            else:
-                df, _ = measurement.build(cfg, need("person"), need("death"), need("visit"),
-                                          person_id_xlsx=_pid_xlsx(cfg, "measurement"),
-                                          mapper=mapper, used_concept_ids=used_concept_ids)
-                _save(cfg, df, "measurement")
 
         else:
             print(f"  (알 수 없는 도메인: {dom} — 건너뜀)")

@@ -11,7 +11,7 @@ import pandas as pd
 
 from ..cdm_schema import select_columns
 from ..config import PipelineConfig
-from ..ids import assign_occurrence_id, filter_person_id_length
+from ..ids import assign_id, filter_person_id_length
 from ..person_filter import (
     exclude_persons,
     keep_in_person_master,
@@ -30,9 +30,13 @@ def build(
     visit: pd.DataFrame,
     *,
     person_id_xlsx: str | Path,
+    mapper=None,
+    used_concept_ids: set | None = None,
+    source_override: pd.DataFrame | None = None,
+    id_counter: dict | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     dom = cfg.domains["note"]
-    a = load_sources(dom, cfg)
+    a = source_override if source_override is not None else load_sources(dom, cfg)
 
     # 날짜구간 컷오프
     lo = pd.Timestamp(dom.extra.get("cutoff_start", "2001-01-01"))
@@ -41,8 +45,8 @@ def build(
     a = a[(d >= lo) & (d <= hi)].copy()
 
     # 채번
-    a = assign_occurrence_id(
-        a,
+    a = assign_id(
+        a, id_counter,
         id_col="note_id",
         datetime_col="note_datetime",
         date_col="note_date",

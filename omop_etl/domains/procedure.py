@@ -11,7 +11,7 @@ import pandas as pd
 
 from ..cdm_schema import select_columns
 from ..config import PipelineConfig
-from ..ids import assign_occurrence_id, filter_person_id_length
+from ..ids import assign_id, filter_person_id_length
 from ..person_filter import (
     apply_cutoff,
     exclude_persons,
@@ -27,13 +27,16 @@ def build(
     cfg: PipelineConfig,
     person: pd.DataFrame,
     death: pd.DataFrame,
+    visit: pd.DataFrame = None,   # procedure 는 visit 매칭 안 함(시그니처 통일용)
     *,
     person_id_xlsx: str | Path,
     mapper=None,
     used_concept_ids: set | None = None,
+    source_override: pd.DataFrame | None = None,
+    id_counter: dict | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     dom = cfg.domains["procedure"]
-    a = load_sources(dom, cfg)
+    a = source_override if source_override is not None else load_sources(dom, cfg)
 
     # 중복 제거: PERSON_ID + procedure_datetime + procedure_source_value
     a = a[a["procedure_datetime"].notna()]
@@ -44,8 +47,8 @@ def build(
     if "procedure_concept_id" not in a.columns:   # 매핑 비활성 + 원천에 없으면
         a["procedure_concept_id"] = 0
     a["procedure_concept_id"] = a["procedure_concept_id"].fillna(0)
-    a = assign_occurrence_id(
-        a,
+    a = assign_id(
+        a, id_counter,
         id_col="procedure_occurrence_id",
         datetime_col="procedure_datetime",
         date_col="procedure_date",

@@ -11,7 +11,7 @@ import pandas as pd
 
 from ..cdm_schema import select_columns
 from ..config import PipelineConfig
-from ..ids import assign_occurrence_id, filter_person_id_length
+from ..ids import assign_id, filter_person_id_length
 from ..person_filter import (
     apply_cutoff,
     exclude_persons,
@@ -31,16 +31,20 @@ def build(
     visit: pd.DataFrame,
     *,
     person_id_xlsx: str | Path,
+    mapper=None,
+    used_concept_ids: set | None = None,
+    source_override: pd.DataFrame | None = None,
+    id_counter: dict | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     dom = cfg.domains["drug"]
-    a = load_sources(dom, cfg)
+    a = source_override if source_override is not None else load_sources(dom, cfg)
     a["quantity"] = a["quantity_days"] * a["days_supply"]
 
     a = match_visit_two_pass(a, visit, date_col="drug_exposure_start_date", **dom.visit_match)
     a = apply_cutoff(a, date_col="drug_exposure_start_date", cutoff_year=dom.cutoff_year)
 
-    a = assign_occurrence_id(
-        a,
+    a = assign_id(
+        a, id_counter,
         id_col="drug_exposure_id",
         datetime_col="drug_exposure_start_datetime",
         date_col="drug_exposure_start_date",

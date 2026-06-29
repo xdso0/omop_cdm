@@ -13,7 +13,7 @@ import pandas as pd
 
 from ..cdm_schema import select_columns
 from ..config import PipelineConfig
-from ..ids import assign_occurrence_id, filter_person_id_length
+from ..ids import assign_id, filter_person_id_length
 from ..person_filter import (
     exclude_persons,
     keep_in_person_master,
@@ -61,9 +61,12 @@ def build(
     person_id_xlsx: str | Path,
     mapper=None,
     used_concept_ids: set | None = None,
+    source_override: pd.DataFrame | None = None,
+    id_counter: dict | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     dom = cfg.domains["measurement"]
-    a = _preprocess(load_sources(dom, cfg))
+    src = source_override if source_override is not None else load_sources(dom, cfg)
+    a = _preprocess(src)
     # Athena 표준 매핑 (LOINC 등). _preprocess 의 concept 보정 이후 적용.
     a = maybe_map_standard(a, cfg, "measurement", mapper, used_concept_ids)
 
@@ -74,8 +77,8 @@ def build(
     ])
 
     # 채번
-    a = assign_occurrence_id(
-        a,
+    a = assign_id(
+        a, id_counter,
         id_col="measurement_id",
         datetime_col="measurement_time",
         date_col="measurement_date",

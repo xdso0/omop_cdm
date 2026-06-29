@@ -140,13 +140,19 @@ paths:
 이어져 PK 가 전역 유일하다.
 
 ```yaml
-stream_domains: ["measurement"]   # 스트리밍으로 처리할 도메인
+# 스트리밍으로 처리할 도메인(이벤트 도메인 모두 지원)
+stream_domains: ["condition", "drug", "procedure", "note", "measurement"]
 chunksize: 500000                 # 청크 크기(행)
 ```
 
+- 각 청크를 해당 도메인 `build()` 에 그대로 적용한다(`source_override`+`id_counter`).
+  즉 **스트리밍 결과 = in-memory 결과** (채번 방식만 다름, 둘 다 PK 유일).
+  → 샘플에서 condition·procedure 내용 동일·PK 유일 검증 완료.
 - DB 입력은 `read_db_chunks`, 파일은 `read_sas_chunks` 로 청크 읽기.
 - 출력은 DB append(첫 청크 replace) 또는 CSV append 로 증분 저장.
 - 메모리 상주분은 visit 룩업·person/death 마스터·현재 청크뿐 → 원천 크기와 무관하게 동작.
+- (참고) procedure 의 중복 제거는 청크 내에서만 적용된다 — 청크 경계를 넘는 완전중복이
+  우려되면 DB 소스를 `SELECT DISTINCT` 뷰로 두거나 in-memory 로 실행.
 
 ## 7. 공통 ETL 패턴
 

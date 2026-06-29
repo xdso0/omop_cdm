@@ -11,7 +11,7 @@ import pandas as pd
 
 from ..cdm_schema import select_columns
 from ..config import PipelineConfig
-from ..ids import assign_occurrence_id, filter_person_id_length
+from ..ids import assign_id, filter_person_id_length
 from ..person_filter import (
     apply_cutoff,
     exclude_persons,
@@ -33,9 +33,11 @@ def build(
     person_id_xlsx: str | Path,
     mapper=None,
     used_concept_ids: set | None = None,
+    source_override: pd.DataFrame | None = None,
+    id_counter: dict | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     dom = cfg.domains["condition"]
-    a = load_sources(dom, cfg)
+    a = source_override if source_override is not None else load_sources(dom, cfg)
     a = a[a["PERSON_ID"].notna()]
     if "visit_occurrence_id" in a.columns:
         a = a.drop(columns="visit_occurrence_id")
@@ -50,8 +52,8 @@ def build(
     a = apply_cutoff(a, date_col="condition_start_date", cutoff_year=dom.cutoff_year)
 
     # 채번
-    a = assign_occurrence_id(
-        a,
+    a = assign_id(
+        a, id_counter,
         id_col="condition_occurrence_id",
         datetime_col="condition_start_datetime",
         date_col="condition_start_date",
