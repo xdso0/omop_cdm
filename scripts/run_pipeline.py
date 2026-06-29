@@ -54,7 +54,9 @@ _FOLDER = {
 
 
 def _pid_xlsx(cfg: PipelineConfig, domain: str) -> Path:
-    return cfg.path(_FOLDER[domain], "person_id.xlsx")
+    # 제외/보정 대상자 목록은 모든 도메인이 중앙 PERSON/person_id.xlsx(Sheet2)에서 읽는다.
+    # (각 도메인 폴더의 person_id.xlsx 는 검증결과 출력용일 뿐 입력 아님)
+    return cfg.path(_FOLDER["person"], "person_id.xlsx")
 
 
 def _save(cfg: PipelineConfig, df, name: str) -> None:
