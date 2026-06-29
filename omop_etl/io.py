@@ -34,19 +34,48 @@ def _encoding_candidates(encoding: str | None) -> list:
     return out
 
 
+def _resolve_usecols(path: str | Path, usecols, encoding: str | None) -> list | None:
+    """원하는 컬럼(소문자 집합)을 파일 실제 컬럼명(대소문자 무관)으로 매핑.
+
+    메타데이터만 먼저 읽어(빠름) 실제 존재하는 컬럼만 골라 반환한다.
+    """
+    if not usecols:
+        return None
+    want = {c.lower() for c in usecols}
+    last = None
+    for enc in _encoding_candidates(encoding):
+        try:
+            kw = {"metadataonly": True}
+            if enc is not None:
+                kw["encoding"] = enc
+            _df, meta = pyreadstat.read_sas7bdat(str(path), **kw)
+            return [c for c in meta.column_names if c.lower() in want]
+        except Exception as e:
+            last = e
+    raise last
+
+
 # --------------------------------------------------------------------- #
-def read_sas(path: str | Path, *, encoding: str = "euc-kr") -> pd.DataFrame:
+def read_sas(
+    path: str | Path, *, encoding: str = "euc-kr", usecols=None
+) -> pd.DataFrame:
     """SAS `.sas7bdat` 파일을 DataFrame 으로 읽는다.
 
     한글이 포함된 데이터셋은 보통 ``euc-kr``/``cp949`` 로 저장돼 있다. 지정 인코딩이
     실패하면 자동으로 다른 인코딩으로 재시도한다.
+
+    usecols : 읽을 컬럼(소문자 집합/리스트). 대소문자 무시. 메모리 절감용으로
+              필요한 컬럼만 읽는다. 없는 컬럼은 무시.
     """
     if pyreadstat is None:
         raise ImportError("pyreadstat 가 필요합니다: pip install pyreadstat")
+    cols = _resolve_usecols(path, usecols, encoding)
     last = None
     for enc in _encoding_candidates(encoding):
         try:
             kw = {} if enc is None else {"encoding": enc}
+            if cols is not None:
+                kw["usecols"] = cols
             df, _meta = pyreadstat.read_sas7bdat(str(path), **kw)
             return df
         except Exception as e:  # 인코딩 오류 시 다음 후보로
@@ -55,16 +84,18 @@ def read_sas(path: str | Path, *, encoding: str = "euc-kr") -> pd.DataFrame:
 
 
 def read_sas_chunks(
-    path: str | Path, *, chunksize: int = 500_000, encoding: str = "euc-kr"
+    path: str | Path, *, chunksize: int = 500_000, encoding: str = "euc-kr", usecols=None
 ) -> Iterator[pd.DataFrame]:
-    """대용량 `.sas7bdat`(수십 GB) 를 청크 단위로 읽는다."""
+    """대용량 `.sas7bdat`(수십 GB) 를 청크 단위로 읽는다(필요 컬럼만)."""
     if pyreadstat is None:
         raise ImportError("pyreadstat 가 필요합니다: pip install pyreadstat")
-    # 인코딩 후보를 순서대로 시도(첫 청크에서 실패하면 다음 후보)
+    cols = _resolve_usecols(path, usecols, encoding)
     last = None
     for enc in _encoding_candidates(encoding):
         try:
             kw = {} if enc is None else {"encoding": enc}
+            if cols is not None:
+                kw["usecols"] = cols
             reader = pyreadstat.read_file_in_chunks(
                 pyreadstat.read_sas7bdat, str(path), chunksize=chunksize, **kw
             )
@@ -74,6 +105,25 @@ def read_sas_chunks(
         except Exception as e:
             last = e
     raise last
+
+
+def downcast_integers(df: pd.DataFrame) -> pd.DataFrame:
+    """정수로 표현 가능한 float 컬럼을 작은 정수형으로 다운캐스트(메모리 절감).
+
+    PERSON_ID·concept_id 등 SAS 에서 float64 로 들어온 정수 컬럼을 줄인다.
+    결측(NaN)이 있으면 nullable Int 로, 없으면 일반 int 로. 실수값(소수점)은 보존.
+    """
+    for c in df.columns:
+        s = df[c]
+        if s.dtype != "float64":
+            continue
+        nona = s.dropna()
+        if len(nona) and (nona == nona.round()).all():
+            if s.isna().any():
+                df[c] = pd.to_numeric(s, downcast="integer").astype("Int64")
+            else:
+                df[c] = pd.to_numeric(s, downcast="integer")
+    return df
 
 
 def read_excel(path: str | Path, sheet: str | int = 0, **kw) -> pd.DataFrame:

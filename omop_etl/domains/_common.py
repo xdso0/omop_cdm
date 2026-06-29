@@ -9,9 +9,47 @@ from __future__ import annotations
 import pandas as pd
 
 from ..config import DomainConfig, PipelineConfig, Source
-from ..io import read_sas
+from ..io import read_sas, downcast_integers
 
 import pandas as _pd
+
+
+# 도메인별로 원천에서 읽을 컬럼(소문자). 메모리 절감을 위해 필요한 것만 읽는다.
+# (rename 원본키·person_id 는 _source_usecols 가 자동 추가, 없는 컬럼은 무시)
+SOURCE_COLUMNS: dict[str, list[str]] = {
+    "person": ["person_id", "gender_concept_id", "year_of_birth", "month_of_birth",
+               "day_of_birth", "race_concept_id", "ethnicity_concept_id", "location_id"],
+    "death": ["person_id", "death_date", "death_datetime", "death_type_concept_id",
+              "cause_concept_id", "cause_source_value", "cause_source_concept_id"],
+    "visit": ["person_id", "visit_concept_id", "visit_start_date", "visit_start_time",
+              "visit_end_date", "visit_end_time", "provider_id", "care_site_id",
+              "payer_source_value", "plan_source_value", "hosp"],
+    "condition": ["person_id", "condition_concept_id", "condition_start_date",
+                  "condition_start_datetime", "condition_end_date", "condition_end_datetime",
+                  "condition_type_concept_id", "stop_reason", "provider_id",
+                  "condition_source_value", "condition_source_concept_id", "hosp"],
+    "drug": ["person_id", "conceptid", "drug_exposure_start_date", "drug_exposure_start_datetime",
+             "drug_exposure_end_date", "drug_exposure_end_datetime", "drug_type_concept_id",
+             "quantity_days", "days_supply", "route_concept_id", "provider_id",
+             "drug_source_value", "hosp"],
+    "procedure": ["person_id", "procedure_concept_id", "procedure_date", "procedure_datetime",
+                  "procedure_type_concept_id", "quantity", "provider_id",
+                  "procedure_source_value", "procedure_source_concept_id", "edi_code", "hosp"],
+    "observation": ["person_id", "observation_concept_id", "observation_date", "observation_time",
+                    "observation_type_concept_id", "value_as_number", "value_as_string",
+                    "value_as_concept_id", "qualifier_concept_id", "unit_concept_id",
+                    "provider_id", "observation_source_value", "observation_source_concept_id",
+                    "unit_source_value", "qualifier_source_value", "name", "hosp"],
+    "note": ["person_id", "note_date", "note_datetime", "note_type_concept_id",
+             "note_class_concept_id", "note_title", "note_text", "encoding_concept_id",
+             "language_concept_id", "provider_id", "note_source_value", "hosp"],
+    "measurement": ["person_id", "measurement_concept_id", "measurement_date", "measurement_time",
+                    "measurement_datetime", "measurement_type_concept_id", "operator_concept_id",
+                    "value_as_number", "value_as_concept_id", "unit_concept_id", "unitconceptid",
+                    "range_low", "range_high", "provider_id", "measurement_source_value",
+                    "measurement_source_concept_id", "unit_source_value", "value_source_value",
+                    "hosp"],
+}
 
 
 def _normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -96,23 +134,37 @@ def _first_date_col(df: pd.DataFrame) -> str:
     raise KeyError("날짜 컬럼(*_date)을 찾지 못했습니다.")
 
 
+def _source_usecols(usecols, opts: dict) -> set | None:
+    """소스에서 실제로 읽을 컬럼 집합. usecols + rename 원본키 + person_id 포함."""
+    if not usecols:
+        return None
+    want = {c.lower() for c in usecols}
+    want |= {k.lower() for k in (opts.get("rename") or {})}  # rename 원본 컬럼도 읽어야 함
+    want |= {"person_id"}                                    # 정규화/검증용 항상 포함
+    return want
+
+
 def load_sources(
-    domain: DomainConfig, cfg: PipelineConfig, *, group: str | None = None
+    domain: DomainConfig, cfg: PipelineConfig, *, group: str | None = None, usecols=None
 ) -> pd.DataFrame:
     """도메인의 모든 버전 소스를 읽어 하나로 합친다.
 
     Parameters
     ----------
-    group : observation 처럼 'exam'/'inpatient' 그룹으로 나뉘는 경우 해당 그룹만 로드.
+    group   : observation 처럼 'exam'/'inpatient' 그룹으로 나뉘는 경우 해당 그룹만.
+    usecols : 읽을 컬럼(소문자). 지정 시 필요한 컬럼만 읽어 메모리를 줄인다.
     """
+    if usecols is None:
+        usecols = SOURCE_COLUMNS.get(domain.name)   # 도메인 기본 컬럼 자동 적용
     frames = []
     for src in domain.sources:
         if group is not None and (src.options or {}).get("group") != group:
             continue
+        cols = _source_usecols(usecols, src.options or {})
         sas_path = cfg.path(src.folder, f"{src.dataset}.sas7bdat")
         csv_path = cfg.path(src.folder, f"{src.dataset}.csv")
         if sas_path.exists():
-            df = read_sas(sas_path, encoding=cfg.sas_encoding)
+            df = read_sas(sas_path, encoding=cfg.sas_encoding, usecols=cols)
         elif csv_path.exists():
             # 입력 템플릿(예시) 또는 CSV 원천 대비 폴백
             df = _pd.read_csv(csv_path)
@@ -123,4 +175,6 @@ def load_sources(
         frames.append(df)
     if not frames:
         return pd.DataFrame()
-    return pd.concat(frames, ignore_index=True)
+    out = pd.concat(frames, ignore_index=True)
+    del frames
+    return downcast_integers(out)            # 정수형 다운캐스트로 메모리 절감
