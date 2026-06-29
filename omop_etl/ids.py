@@ -63,10 +63,9 @@ def assign_occurrence_id(
         out = out[d.notna()].reset_index(drop=True)
         d = pd.to_datetime(out[date_col], errors="coerce")
 
-    # 같은 날짜가 연속될 때 1,2,3...; 날짜가 바뀌면 1로 리셋 (SAS lag 와 동일)
-    same_as_prev = d.eq(d.shift())
-    grp = (~same_as_prev).cumsum()
-    seq = out.groupby(grp).cumcount() + 1
+    # 날짜별로 1..N 일련번호 부여(날짜 그룹 직접 사용 → 정렬·결측과 무관하게
+    # 같은 날짜 안에서 항상 유일, 따라서 occurrence_id 도 유일).
+    seq = out.groupby(d.dt.normalize(), sort=False).cumcount() + 1
 
     yy = (d.dt.year - 2000).astype(int).map(lambda x: f"{x:02d}")
     mm = d.dt.month.astype(int).map(lambda x: f"{x:02d}")

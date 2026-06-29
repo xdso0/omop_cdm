@@ -42,8 +42,7 @@ def build(
     if not _d.notna().all():
         b1 = b1[_d.notna()].reset_index(drop=True)
     d = pd.to_datetime(b1["visit_start_date"], errors="coerce")
-    grp = (~d.eq(d.shift())).cumsum()
-    seq = b1.groupby(grp).cumcount() + 1
+    seq = b1.groupby(d.dt.normalize(), sort=False).cumcount() + 1  # 날짜별 유일 일련번호
     nn = seq.map(lambda x: f"{x:05d}")
     yy = (d.dt.year - 2000).astype(int).map(lambda x: f"{x:02d}")
     mm = d.dt.month.astype(int).map(lambda x: f"{x:02d}")
