@@ -96,10 +96,10 @@ domains:
     cutoff_year: 2026
     visit_match: {window_pre_days: 0, order_by_diff: false, null_9203_pass2: true}
     sources:
-      - {folder: "drug/b01", dataset: "step01", hosp: 1, options: {drop: ["edi"], rename: {inCode: "LOCAL_DRUG_CODE"}}}
+      - {folder: "drug/b01", dataset: "step01", hosp: 1, options: {drop: ["edi"], rename: {incode: "local_drug_code"}}}
       - {folder: "drug/b02", dataset: "step01", hosp: 1}
       - {folder: "drug/b03", dataset: "step01", hosp: 2}
-      - {folder: "drug/b04", dataset: "step01", options: {drop: ["DRUG_SOURCE_VALUE"], rename: {ingredientCode: "DRUG_SOURCE_VALUE"}}}
+      - {folder: "drug/b04", dataset: "step01", options: {drop: ["drug_source_value"], rename: {ingredientcode: "drug_source_value"}}}
 
   # -------------------------------------------------- procedure
   procedure:

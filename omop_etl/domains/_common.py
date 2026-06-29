@@ -14,6 +14,20 @@ from ..io import read_sas
 import pandas as _pd
 
 
+def _normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """컬럼명을 소문자로 통일(SAS 는 대소문자 무시하나 pandas 는 구분).
+
+    소스마다 visit_start_date / VISIT_START_DATE 처럼 케이스가 달라 합칠 때
+    서로 다른 컬럼으로 취급되는 문제를 막는다. PERSON_ID 만 대문자 규칙 유지.
+    """
+    df = df.copy()
+    df.columns = [str(c).lower() for c in df.columns]
+    df = df.loc[:, ~df.columns.duplicated()]
+    if "person_id" in df.columns:
+        df = df.rename(columns={"person_id": "PERSON_ID"})
+    return df
+
+
 def _apply_options(df: pd.DataFrame, src: Source, *, encoding: str) -> pd.DataFrame:
     opts = src.options or {}
 
@@ -104,6 +118,7 @@ def load_sources(
             df = _pd.read_csv(csv_path)
         else:
             raise FileNotFoundError(f"원천 없음: {sas_path} (또는 .csv)")
+        df = _normalize_columns(df)          # 컬럼명 소문자 통일 (케이스 불일치 방지)
         df = _apply_options(df, src, encoding=cfg.sas_encoding)
         frames.append(df)
     if not frames:
