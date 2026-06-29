@@ -1,0 +1,74 @@
+# Excel 입력 → DB 출력 예시 설정
+#
+# - 입력: source_db 를 두지 않으면 파일에서 읽는다.
+#         mapping_root 아래 <folder>/<dataset>.xlsx (없으면 .csv, .sas7bdat 순으로 자동 인식)
+# - 출력: output_db 를 두면 생성된 CDM 테이블을 DB 에 저장한다.
+#
+# 실행:
+#   복사 → pipeline.excel_to_db.local.yaml 로 저장(접속정보 포함, .gitignore 제외)
+#   python scripts/run_pipeline.py --config config/pipeline.excel_to_db.local.yaml \
+#          --domains person death visit condition procedure
+
+paths:
+  mapping_root: "D:/g/excel_sources"   # 여기 아래에 엑셀 소스 파일을 둔다(아래 layout 참고)
+  output_db: "postgresql+psycopg2://USER:PASSWORD@localhost:5432/CDM_DB"
+  output_schema: "cdm"
+  output_root: "D:/g/cdm_output"       # output_db 가 있으면 파일 저장은 생략됨
+  output_format: "csv"
+  vocab_root: "D:/g/vocab/260430"
+  unmapped_root: "D:/g/cdm_output/unmapped"
+  used_vocab_root: "D:/g/cdm_output/used_vocab"
+  vocab_cache_root: "D:/g/cdm_output/_vocab_cache"
+
+# 엑셀 소스 폴더 layout (mapping_root 기준):
+#   excel_sources/
+#     person/person_id.xlsx                 # 제외/보정 대상자(Sheet2) — 항상 엑셀
+#     person/b01/person.xlsx                # 도메인 소스 = <folder>/<dataset>.xlsx
+#     death/b01/death.xlsx
+#     visit/b01/visit_occurrence_full.xlsx
+#     condition/b01/condition_occurrence.xlsx
+#     procedure/b01/procedure.xlsx
+#   (배치가 여러 개면 b02, b03 ... 폴더를 늘리고 아래 sources 에 한 줄씩 추가)
+
+sas_encoding: "euc-kr"
+cutoff_year: 2026
+
+vocabulary:
+  athena_release: "260430"
+  mappings:
+    condition:
+      source_col: "condition_source_value"
+      source_vocabulary: "KCD7"
+      concept_col: "condition_concept_id"
+      source_concept_col: "condition_source_concept_id"
+      code_transform: "kcd7"
+
+# 대용량이면 스트리밍으로(엑셀은 한 번에 읽지만 처리는 청크로):
+# stream_domains: ["condition", "drug", "procedure", "observation", "note", "measurement"]
+# chunksize: 500000
+
+domains:
+  person:
+    domain_code: "00"
+    sources:
+      - {folder: "person/b01", dataset: "person"}
+  death:
+    domain_code: "-"
+    sources:
+      - {folder: "death/b01", dataset: "death"}
+  visit:
+    domain_code: "01"
+    seq_width: 5
+    sources:
+      - {folder: "visit/b01", dataset: "visit_occurrence_full", hosp: 1}
+  condition:
+    domain_code: "02"
+    seq_width: 5
+    visit_match: {window_pre_days: 0, order_by_diff: false, null_9203_pass2: false}
+    sources:
+      - {folder: "condition/b01", dataset: "condition_occurrence", hosp: 1}
+  procedure:
+    domain_code: "04"
+    seq_width: 6
+    sources:
+      - {folder: "procedure/b01", dataset: "procedure", hosp: 1}
