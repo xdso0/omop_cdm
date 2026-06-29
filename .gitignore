@@ -1,0 +1,71 @@
+# =====================================================================
+# 데이터/산출물 제외 패턴
+# =====================================================================
+
+# --- SAS 데이터셋 / 원천 데이터 ---
+*.sas7bdat
+*.sas7bcat
+*.xpt
+*.bdat
+
+# --- 엑셀 / CSV / 텍스트 원천 ---
+*.xlsx
+*.xls
+*.csv
+*.lst
+*.txt
+!requirements.txt
+*.bak
+*.backup
+*.dat
+
+# --- 압축 / 백업 ---
+*.zip
+*.7z
+*.gz
+*.tar
+*.rar
+
+# --- OMOP vocabulary / 어휘 덤프 ---
+vocab/
+**/vocab.backup
+
+# --- 파이프라인 산출물 ---
+output/
+out/
+cdm_output/
+*.parquet
+*.feather
+
+# --- Jupyter / Python ---
+.ipynb_checkpoints/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.env
+.python-version
+
+# --- IDE / OS ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+~$*
+
+# --- 로그 ---
+*.log
+logs/
+
+# =====================================================================
+# 예시/템플릿 폴더는 버전관리에 포함
+# =====================================================================
+!input/
+!input/**
+!output_example/
+!output_example/**
+# 단, vocab 매핑 캐시(재생성 가능)는 제외
+output_example/_vocab_cache/
+input/sample/**/_vocab_cache/

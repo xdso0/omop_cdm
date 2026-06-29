@@ -1,0 +1,4 @@
+﻿PERSON_ID,condition_start_date,condition_start_datetime,condition_end_date,condition_end_datetime,condition_type_concept_id,stop_reason,provider_id,condition_source_value
+12345678,2020-05-11,2020-05-11 09:30:00,,,32020,,7,F32.9
+12345678,2020-05-11,2020-05-11 09:31:00,,,32020,,7,Z99.9
+23456789,2021-08-01,2021-08-01 13:30:00,,,32020,,9,R55

@@ -1,0 +1,3 @@
+﻿PERSON_ID,procedure_date,procedure_datetime,procedure_type_concept_id,quantity,provider_id,EDI_code,procedure_source_value
+12345678,2020-05-11,2020-05-11 10:00:00,38000275,1,7,AA100,AA100
+12345678,2020-05-11,2020-05-11 10:05:00,38000275,1,7,ZZ999,ZZ999

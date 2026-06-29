@@ -1,0 +1,147 @@
+# ====================================================================
+# OMOP CDM ETL 파이프라인 설정 (템플릿)
+#
+# - paths.mapping_root : 원천 폴더 루트
+# - 신규 배치 추가 시: 해당 도메인 sources 에 항목 한 줄 추가
+# - hosp: 사이트 구분 (1=site1, 2=site2). null 이면 원천에 이미 포함
+# - folder/dataset 이름은 환경에 맞게 교체해 사용
+# ====================================================================
+
+paths:
+  mapping_root: "./data/source"
+  output_root: "./output"
+  output_format: "parquet"        # parquet | csv | sas7bdat
+  vocab_root: "./data/vocab"      # Athena 추출본(CONCEPT.csv 등, 탭 구분)
+  unmapped_root: "./output/unmapped"
+  used_vocab_root: "./output/used_vocab"
+  vocab_cache_root: "./output/_vocab_cache"
+
+sas_encoding: "euc-kr"
+cutoff_year: 2026
+
+# ====================================================================
+# Athena vocabulary 기반 표준 매핑
+#   - athena_release: vocab_root 추출본 버전. 갱신 시 이 값과 vocab_root 만
+#     변경하면 전체 파이프라인이 새 vocabulary 를 따른다.
+#   - mappings: 도메인별 (원천코드 컬럼 → 표준 concept) 규칙
+#       source_vocabulary 는 CONCEPT.csv 의 vocabulary_id 값
+#   - standard_concept='S' 인 표준 concept 만 결과에 사용
+# ====================================================================
+vocabulary:
+  athena_release: "release"
+  mappings:
+    condition:
+      source_col: "condition_source_value"
+      source_vocabulary: "KCD7"
+      concept_col: "condition_concept_id"
+      source_concept_col: "condition_source_concept_id"
+    procedure:
+      source_col: "procedure_source_value"
+      source_vocabulary: "Korean Revenue Code"
+      concept_col: "procedure_concept_id"
+      source_concept_col: "procedure_source_concept_id"
+    measurement:
+      source_col: "measurement_source_value"
+      source_vocabulary: "LOINC"
+      concept_col: "measurement_concept_id"
+      source_concept_col: "measurement_source_concept_id"
+
+domains:
+
+  # -------------------------------------------------- person
+  person:
+    domain_code: "00"
+    cutoff_year: 2026
+    sources:
+      - {folder: "person/b01", dataset: "person", hosp: 1, options: {int_person_id: true}}
+      - {folder: "person/b02", dataset: "person", hosp: 1}
+      - {folder: "person/b03", dataset: "person", hosp: 2}
+      - {folder: "person/b04", dataset: "person"}
+
+  # -------------------------------------------------- death
+  death:
+    domain_code: "-"
+    cutoff_year: 2026
+    sources:
+      - {folder: "death/b01", dataset: "death", options: {drop: ["code"]}}
+      - {folder: "death/b02", dataset: "death"}
+      - {folder: "death/b03", dataset: "death"}
+
+  # -------------------------------------------------- visit
+  visit:
+    domain_code: "01"
+    seq_width: 5
+    cutoff_year: 2026
+    sources:
+      - {folder: "visit/b01", dataset: "visit_occurrence_full",    hosp: 1}
+      - {folder: "visit/b02", dataset: "visit_occurrence_full",    hosp: 2}
+      - {folder: "visit/b03", dataset: "visit_occurrence_full_s1", hosp: 1}
+      - {folder: "visit/b03", dataset: "visit_occurrence_full_s2", hosp: 2}
+
+  # -------------------------------------------------- condition
+  condition:
+    domain_code: "02"
+    seq_width: 5
+    cutoff_year: 2026
+    visit_match: {window_pre_days: 0, order_by_diff: false, null_9203_pass2: false}
+    sources:
+      - {folder: "condition/b01", dataset: "condition_occurrence", hosp: 1}
+      - {folder: "condition/b02", dataset: "condition_occurrence"}
+      - {folder: "condition/b03", dataset: "condition_occurrence"}
+
+  # -------------------------------------------------- drug
+  drug:
+    domain_code: "03"
+    seq_width: 5
+    cutoff_year: 2026
+    visit_match: {window_pre_days: 0, order_by_diff: false, null_9203_pass2: true}
+    sources:
+      - {folder: "drug/b01", dataset: "step01", hosp: 1, options: {drop: ["edi"], rename: {inCode: "LOCAL_DRUG_CODE"}}}
+      - {folder: "drug/b02", dataset: "step01", hosp: 1}
+      - {folder: "drug/b03", dataset: "step01", hosp: 2}
+      - {folder: "drug/b04", dataset: "step01", options: {drop: ["DRUG_SOURCE_VALUE"], rename: {ingredientCode: "DRUG_SOURCE_VALUE"}}}
+
+  # -------------------------------------------------- procedure
+  procedure:
+    domain_code: "04"
+    seq_width: 6
+    cutoff_year: 2026
+    sources:
+      - {folder: "procedure/b01", dataset: "procedure_occurrence", hosp: 1, options: {date_between: ["2001-01-01", "2018-01-31"]}}
+      - {folder: "procedure/b02", dataset: "procedure", options: {year_min: 2018}}
+      - {folder: "procedure/b03", dataset: "procedure", options: {year_min: 2018}}
+
+  # -------------------------------------------------- measurement
+  measurement:
+    domain_code: "05"
+    seq_width: 6
+    cutoff_year: 2026
+    visit_match: {window_pre_days: 7, order_by_diff: true, null_9203_pass2: true}
+    sources:
+      - {folder: "measurement/b01", dataset: "measurement", hosp: 1, options: {int_person_id: true}}
+      - {folder: "measurement/b02", dataset: "measurement"}
+      - {folder: "measurement/b03", dataset: "measurement"}
+
+  # -------------------------------------------------- observation
+  observation:
+    domain_code: "06"
+    seq_width: 5
+    cutoff_year: 2026
+    # exam 그룹(visit 매칭 안 함) vs inpatient 그룹(visit 1단계 매칭)
+    sources:
+      - {folder: "observation/b01", dataset: "observation", hosp: 1, options: {drop: ["name"], group: "exam"}}
+      - {folder: "observation/b02", dataset: "observation", options: {group: "inpatient"}}
+      - {folder: "observation/b03", dataset: "observation", options: {group: "exam"}}
+      - {folder: "observation/b04", dataset: "observation", options: {group: "inpatient"}}
+
+  # -------------------------------------------------- note
+  note:
+    domain_code: "09"
+    seq_width: 6
+    cutoff_start: "2001-01-01"
+    cutoff_end: "2025-12-31"
+    visit_match: {window_pre_days: 7, order_by_diff: true, null_9203_pass2: true}
+    sources:
+      - {folder: "note/b01", dataset: "note"}
+      - {folder: "note/b02", dataset: "note"}
+      - {folder: "note/b03", dataset: "note"}

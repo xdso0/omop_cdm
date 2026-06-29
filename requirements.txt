@@ -1,0 +1,6 @@
+pandas>=2.0
+numpy>=1.24
+pyreadstat>=1.2      # SAS sas7bdat 읽기/쓰기
+openpyxl>=3.1        # .xlsx 읽기/쓰기
+pyyaml>=6.0          # 파이프라인 설정 로딩
+pyarrow>=14.0        # parquet 산출물

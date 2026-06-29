@@ -1,0 +1,4 @@
+﻿condition_occurrence_id,person_id,condition_concept_id,condition_start_date,condition_start_datetime,condition_end_date,condition_end_datetime,condition_type_concept_id,condition_status_concept_id,stop_reason,provider_id,visit_occurrence_id,visit_detail_id,condition_source_value,condition_source_concept_id,condition_status_source_value
+12005110200001,12345678,35489007,2020-05-11,2020-05-11 09:30:00,,,32020,0,,7,12005100100001,12005100100001,F32.9,100,
+12005110200002,12345678,0,2020-05-11,2020-05-11 09:31:00,,,32020,0,,7,12005100100001,12005100100001,Z99.9,102,
+12108010200001,23456789,271594007,2021-08-01,2021-08-01 13:30:00,,,32020,0,,9,12108010100001,12108010100001,R55,101,

@@ -1,0 +1,52 @@
+# 자동 생성된 실행 예시 설정 (scripts/make_sample.py)
+paths:
+  mapping_root: "input/sample/mapping"
+  output_root: "output_example"
+  output_format: "csv"
+  vocab_root: "input/sample/vocab"
+  unmapped_root: "output_example/unmapped"
+  used_vocab_root: "output_example/used_vocab"
+  vocab_cache_root: "output_example/_vocab_cache"
+
+sas_encoding: "euc-kr"
+cutoff_year: 2026
+
+vocabulary:
+  athena_release: "sample"
+  mappings:
+    condition:
+      source_col: "condition_source_value"
+      source_vocabulary: "KCD7"
+      concept_col: "condition_concept_id"
+      source_concept_col: "condition_source_concept_id"
+    procedure:
+      source_col: "procedure_source_value"
+      source_vocabulary: "Korean Revenue Code"
+      concept_col: "procedure_concept_id"
+      source_concept_col: "procedure_source_concept_id"
+
+domains:
+  person:
+    domain_code: "00"
+    sources:
+      - {folder: "person/sample", dataset: "person"}
+  death:
+    domain_code: "-"
+    sources:
+      - {folder: "death/sample", dataset: "death"}
+  visit:
+    domain_code: "01"
+    seq_width: 5
+    sources:
+      - {folder: "visit/sample", dataset: "visit_occurrence_full", hosp: 1}
+  condition:
+    domain_code: "02"
+    seq_width: 5
+    visit_match: {window_pre_days: 0, order_by_diff: false, null_9203_pass2: false}
+    sources:
+      - {folder: "condition/sample", dataset: "condition_occurrence", hosp: 1}
+  procedure:
+    domain_code: "04"
+    seq_width: 6
+    sources:
+      - {folder: "procedure/sample", dataset: "procedure", hosp: 1}
