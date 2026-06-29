@@ -1,6 +1,5 @@
 """PERSON 도메인.
 
-원본: ``person/person_join.sas``.
 처리 순서
   1) 버전 통합 — 동일 PERSON_ID 는 먼저 등장한 버전 우선(신규만 추가)
   2) 보정 엑셀(person_id.xlsx Sheet2, pp1) 로 gender/출생연월 덮어쓰기
@@ -39,7 +38,7 @@ def build(
     # 1) 버전 통합: 먼저 등장한 PERSON_ID 우선
     b = b[b["PERSON_ID"].notna()]
     b = b.drop_duplicates("PERSON_ID", keep="first")
-    # location_id 큰 값 우선(원본의 descending location_id dedup)
+    # location_id 큰 값 우선(location_id 큰 값 우선)
     if "location_id" in b.columns:
         b = b.sort_values(["PERSON_ID", "location_id"], ascending=[True, False])
         b = b.drop_duplicates("PERSON_ID", keep="first")

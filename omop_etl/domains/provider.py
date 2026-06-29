@@ -1,6 +1,5 @@
 """PROVIDER 도메인.
 
-원본: ``provider/provider.sas``.
 care_site 와 동일한 provider 엑셀을 쓰되 provider_id = care_site_id 로 두고
 specialty_concept_id 에 첫 concept_id 를 둔다.
 """

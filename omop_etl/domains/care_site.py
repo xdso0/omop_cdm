@@ -1,6 +1,5 @@
 """CARE_SITE 도메인.
 
-원본: ``care_site/step02_careSite.sas``.
 provider 엑셀(care_site_id, care_site_rawname, concept_id)을 care_site_id 로
 묶어 이름은 ``', '`` 로 연결, 첫 concept_id 를 place_of_service_concept_id 로 둔다.
 """

@@ -1,7 +1,5 @@
 """MEASUREMENT 도메인.
 
-원본: ``measurement/measurement_join.sas`` (성능을 위해 hash join 사용하지만
-로직은 다른 도메인과 동일).
 
 처리: 버전 통합 → [2001-01-01, 2025-12-31] 구간 + concept 보정 → 중복 제거 →
 채번('05', 6자리) → PERSON_ID 8자리/대상자 제외/사망후 제거 → person 검증 →

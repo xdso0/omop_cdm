@@ -1,7 +1,7 @@
 """방문(visit_occurrence) 매칭.
 
 각 도메인의 사건(진단/약물/노트/관찰/검사)을 방문에 연결한다.
-원본 SAS 는 두 가지 방식을 쓴다.
+두 가지 매칭 방식을 쓴다.
 
 **2단계 매칭** (condition / drug / note / measurement)
   1) 1차: 같은 환자 + 날짜구간 포함 + ``provider_id`` 일치
@@ -42,7 +42,7 @@ _VISIT_COLS = [
 def _dedup_visits(visits: pd.DataFrame, *, person_col: str, with_provider: bool) -> pd.DataFrame:
     """방문 룩업을 (person, start, end[, provider]) 기준으로 중복 제거.
 
-    SAS 의 ``ddd = cats(person, vstart, vend[, provider]); if first.ddd;`` 대응.
+    같은 (person, start, end[, provider]) 조합의 첫 행만 남긴다.
     """
     keys = [person_col, "visit_start_date", "visit_end_date"]
     if with_provider:

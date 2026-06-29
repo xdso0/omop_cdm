@@ -1,8 +1,7 @@
 """OMOP CDM 테이블별 최종 컬럼 정의.
 
-각 도메인 SAS 의 마지막 ``proc sql create table ... select distinct`` 에 나열된
-컬럼 순서를 그대로 옮겼다. :func:`select_columns` 로 최종 산출물의 컬럼 순서를
-강제한다.
+각 CDM 테이블의 표준 컬럼과 순서를 정의한다. :func:`select_columns` 로 최종
+산출물의 컬럼 순서를 강제한다.
 """
 from __future__ import annotations
 

@@ -1,8 +1,7 @@
 """도메인 모듈 공통 헬퍼.
 
-버전(추출 배치)별 원천 sas7bdat 를 읽어 hosp 부여 / rename / drop /
-PERSON_ID 정수화 / 연도·기간 필터 같은 배치별 특수처리를 적용하고 합친다.
-원본 SAS 의 ``data aN; set libX.tbl; ... run;`` 묶음을 대체한다.
+버전(추출 배치)별 원천 데이터를 읽어 hosp 부여 / rename / drop /
+PERSON_ID 정수화 / 연도·기간 필터 같은 배치별 특수처리를 적용하고 하나로 합친다.
 """
 from __future__ import annotations
 
@@ -53,7 +52,7 @@ SOURCE_COLUMNS: dict[str, list[str]] = {
 
 
 def _normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
-    """컬럼명을 소문자로 통일(SAS 는 대소문자 무시하나 pandas 는 구분).
+    """컬럼명을 소문자로 통일(원천마다 대소문자가 달라 합칠 때 다른 컬럼으로 취급되는 것 방지).
 
     소스마다 visit_start_date / VISIT_START_DATE 처럼 케이스가 달라 합칠 때
     서로 다른 컬럼으로 취급되는 문제를 막는다. PERSON_ID 만 대문자 규칙 유지.
@@ -73,7 +72,7 @@ def _apply_options(df: pd.DataFrame, src: Source, *, encoding: str) -> pd.DataFr
         df["hosp"] = src.hosp
 
     if opts.get("int_person_id"):
-        # SAS: ppp=int(person_id); if ppp=. then delete;
+        # person_id 를 정수화하고, 정수가 아니면 제외
         pid = pd.to_numeric(df.get("person_id", df.get("PERSON_ID")), errors="coerce")
         df = df.assign(PERSON_ID=pid.astype("Int64"))
         df = df[df["PERSON_ID"].notna()]

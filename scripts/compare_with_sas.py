@@ -1,7 +1,7 @@
-"""Python 산출물 ↔ 원본 SAS 산출물 동등성 비교.
+"""생성 산출물 ↔ 기존 산출물 대조(검증용).
 
-기존 SAS 가 만든 CDM 테이블(`*.sas7bdat`)과 본 패키지가 만든 결과를 비교해
-*Python 포팅이 원본을 재현하는지* 확인한다.
+비교 기준이 될 기존 CDM 테이블(`*.sas7bdat`/csv)이 있으면, 본 패키지가 생성한
+결과와 행 수·키·분포를 대조해 차이를 점검한다.
 
 비교 항목
   - 행 수, 컬럼 집합
@@ -36,9 +36,9 @@ def _norm(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Python ↔ SAS 산출물 비교")
+    ap = argparse.ArgumentParser(description="생성 산출물 ↔ 기존 산출물 대조")
     ap.add_argument("--python", required=True, help="Python 산출 파일(.parquet/.csv)")
-    ap.add_argument("--sas", required=True, help="원본 SAS 파일(.sas7bdat)")
+    ap.add_argument("--sas", required=True, help="비교 기준이 될 기존 산출물(.sas7bdat)")
     ap.add_argument("--keys", nargs="*", default=["person_id"], help="비교할 키 컬럼들")
     ap.add_argument("--concept", default=None, help="분포 비교할 concept 컬럼")
     ap.add_argument("--date", default=None, help="범위 비교할 날짜 컬럼")
@@ -52,14 +52,14 @@ def main() -> None:
 
     # 1) 행 수
     diff = len(py) - len(sas)
-    print(f"[행 수] Python {len(py):,} / SAS {len(sas):,}  (차이 {diff:+,}, "
-          f"{100*len(py)/len(sas):.2f}%)" if len(sas) else "[행 수] SAS 0")
+    print(f"[행 수] 생성 {len(py):,} / 기존 {len(sas):,}  (차이 {diff:+,}, "
+          f"{100*len(py)/len(sas):.2f}%)" if len(sas) else "[행 수] 기존 0")
 
     # 2) 컬럼 집합
     only_py = set(py.columns) - set(sas.columns)
     only_sas = set(sas.columns) - set(py.columns)
     if only_py: print(f"[컬럼] Python 에만: {sorted(only_py)}")
-    if only_sas: print(f"[컬럼] SAS 에만: {sorted(only_sas)}")
+    if only_sas: print(f"[컬럼] 기존에만: {sorted(only_sas)}")
     if not only_py and not only_sas: print("[컬럼] 동일")
 
     # 3) 키 비교
@@ -67,8 +67,8 @@ def main() -> None:
         if k in py.columns and k in sas.columns:
             sp, ss = set(py[k].dropna()), set(sas[k].dropna())
             inter = len(sp & ss)
-            print(f"[키:{k}] 고유 Python {len(sp):,} / SAS {len(ss):,} / 교집합 {inter:,} "
-                  f"/ Python only {len(sp-ss):,} / SAS only {len(ss-sp):,}")
+            print(f"[키:{k}] 고유 생성 {len(sp):,} / 기존 {len(ss):,} / 교집합 {inter:,} "
+                  f"/ 생성 only {len(sp-ss):,} / 기존 only {len(ss-sp):,}")
 
     # 4) concept 분포 (상위 차이)
     if args.concept and args.concept in py.columns and args.concept in sas.columns:
@@ -85,7 +85,7 @@ def main() -> None:
         dp = pd.to_datetime(py[args.date], errors="coerce")
         ds = pd.to_datetime(sas[args.date], errors="coerce")
         print(f"\n[날짜:{args.date}] Python [{dp.min()} ~ {dp.max()}] / "
-              f"SAS [{ds.min()} ~ {ds.max()}]")
+              f"기존 [{ds.min()} ~ {ds.max()}]")
 
 
 if __name__ == "__main__":

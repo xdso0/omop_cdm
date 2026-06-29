@@ -1,6 +1,5 @@
 """NOTE 도메인.
 
-원본: ``note/script.sas``.
 특이점: ① 컷오프가 [cutoff_start, cutoff_end] 날짜 구간, ② visit 2단계 매칭
 (window 7일, 종료일 거리 우선, 9203 NULL), ③ 텍스트 정제($$$$ 제거 후 따옴표 래핑).
 """

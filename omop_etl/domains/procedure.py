@@ -1,6 +1,5 @@
 """PROCEDURE_OCCURRENCE 도메인.
 
-원본: ``procedure/procedure_join.sas``.
 visit 매칭을 하지 않고(미연결 NULL), (PERSON_ID, datetime, source_value) 기준으로
 중복 제거하는 점이 다르다.
 """

@@ -1,6 +1,5 @@
 """OBSERVATION 도메인.
 
-원본: ``observation/observation_join.sas``.
 원천이 두 그룹으로 나뉜다.
   - exam(종검)     : visit 매칭 안 함
   - inpatient(입원): visit 1단계 매칭(9203 NULL)
@@ -60,7 +59,7 @@ def build(
     a = a.rename(columns={"observation_time": "observation_datetime"})
 
     a = remove_after_death(a, death, date_col="observation_date")
-    # 원본은 PERSON_ID 자리수 > 1 만 유지
+    # PERSON_ID 자리수 > 1 만 유지
     a = a[a["PERSON_ID"].astype("Int64").astype(str).str.len() > 1]
     a["observation_concept_id"] = a["observation_concept_id"].fillna(0)
 

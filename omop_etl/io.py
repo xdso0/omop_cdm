@@ -1,10 +1,7 @@
 """입출력 유틸리티.
 
-SAS(`*.sas7bdat`), Excel(`*.xlsx`), CSV 를 pandas DataFrame 으로 읽고,
+원천 데이터(`*.sas7bdat`, `*.xlsx`, `*.csv`)를 pandas DataFrame 으로 읽고,
 CDM 산출물을 parquet/csv 로 저장한다.
-
-SAS `libname xx 'dir'; data ...; set xx.tbl; run;` 패턴을
-:func:`read_sas` 한 번으로 대체한다.
 """
 from __future__ import annotations
 
@@ -13,7 +10,7 @@ from typing import Iterator
 
 import pandas as pd
 
-try:  # pyreadstat 은 SAS 입출력에만 필요 (없어도 xlsx/csv 는 동작)
+try:  # pyreadstat 은 .sas7bdat 입출력에만 필요 (없어도 xlsx/csv 는 동작)
     import pyreadstat
 except ImportError:  # pragma: no cover
     pyreadstat = None
@@ -21,7 +18,8 @@ except ImportError:  # pragma: no cover
 
 # --------------------------------------------------------------------- #
 # 읽기
-# 한글 SAS 파일 인코딩 폴백 순서. 파일마다 euc-kr/cp949 가 섞여 있고
+# --------------------------------------------------------------------- #
+# 한글 .sas7bdat 인코딩 폴백 순서. 파일마다 euc-kr/cp949 가 섞여 있고
 # 일부는 잘못된 바이트가 있어, 주어진 인코딩 → cp949(상위호환) → 자동(None)
 # → latin1(최후, 무손실 바이트 매핑) 순으로 시도한다.
 def _encoding_candidates(encoding: str | None) -> list:
@@ -108,26 +106,23 @@ def read_sas_chunks(
 
 
 def downcast_integers(df: pd.DataFrame) -> pd.DataFrame:
-    """정수로 표현 가능한 float 컬럼을 작은 정수형으로 다운캐스트(메모리 절감).
+    """정수로 표현 가능하고 결측이 없는 float 컬럼만 일반 정수형으로 다운캐스트.
 
-    PERSON_ID·concept_id 등 SAS 에서 float64 로 들어온 정수 컬럼을 줄인다.
-    결측(NaN)이 있으면 nullable Int 로, 없으면 일반 int 로. 실수값(소수점)은 보존.
+    PERSON_ID·concept_id 등 원천에서 float64 로 들어온 정수 컬럼의 메모리를 줄인다.
+    결측(NaN)이 있는 컬럼은 그대로 둔다(nullable Int 로 바꾸면 이후 불리언 연산에서
+    NA 모호성 오류가 나므로). 실수값(소수점)은 보존한다.
     """
     for c in df.columns:
         s = df[c]
-        if s.dtype != "float64":
+        if s.dtype != "float64" or s.isna().any():
             continue
-        nona = s.dropna()
-        if len(nona) and (nona == nona.round()).all():
-            if s.isna().any():
-                df[c] = pd.to_numeric(s, downcast="integer").astype("Int64")
-            else:
-                df[c] = pd.to_numeric(s, downcast="integer")
+        if len(s) and (s == s.round()).all():
+            df[c] = pd.to_numeric(s, downcast="integer")
     return df
 
 
 def read_excel(path: str | Path, sheet: str | int = 0, **kw) -> pd.DataFrame:
-    """Excel 시트를 DataFrame 으로 읽는다 (SAS `proc import ... dbms=xlsx`)."""
+    """Excel 시트를 DataFrame 으로 읽는다."""
     return pd.read_excel(path, sheet_name=sheet, **kw)
 
 
@@ -152,7 +147,6 @@ def read_table(path: str | Path, **kw) -> pd.DataFrame:
 def write_cdm(df: pd.DataFrame, path: str | Path, *, fmt: str = "parquet") -> Path:
     """CDM 테이블을 저장한다.
 
-    SAS ``data lib.table; set ...; run;`` 의 최종 저장 단계를 대체한다.
     기본은 parquet (대용량·타입 보존). ``fmt='csv'`` 도 가능.
     """
     p = Path(path)

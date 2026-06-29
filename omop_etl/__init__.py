@@ -1,13 +1,10 @@
 """omop-cdm-etl
 ================
-EMR/OCS 원천 데이터를 OMOP CDM(v5.x)으로 변환하는 ETL 패키지.
-
-기존 SAS(`*_join.sas`) + 버전별 전처리(`step01.sas` 등) 로직을 재사용 가능한
-Python 모듈로 재구성한 것이다.
+EMR/OCS 원천 데이터를 OMOP CDM(v5.x)으로 변환·생성하는 ETL 패키지.
 
 구성
 ----
-- :mod:`omop_etl.io`            : SAS/Excel/CSV 입출력
+- :mod:`omop_etl.io`            : 원천(sas7bdat)/Excel/CSV 입출력
 - :mod:`omop_etl.ids`           : OMOP 기본키(occurrence_id) 채번
 - :mod:`omop_etl.visit_match`   : 방문(visit) 매칭
 - :mod:`omop_etl.person_filter` : 사망일/대상자 필터, person 마스터 정합성 검증

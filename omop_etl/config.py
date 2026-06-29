@@ -2,7 +2,7 @@
 
 ``config/pipeline.yaml`` 을 읽어 도메인별 경로/버전목록/채번코드/컷오프 등을
 제공한다. 신규 연도(추출 배치)가 추가되면 YAML 의 해당 도메인 ``sources`` 에
-한 줄만 추가하면 된다 (원본 SAS 에서 ``libname`` 한 줄 추가하던 것과 동일).
+한 줄만 추가하면 된다.
 """
 from __future__ import annotations
 

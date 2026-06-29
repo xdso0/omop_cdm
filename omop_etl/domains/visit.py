@@ -1,6 +1,5 @@
-"""VISIT 도메인 (visit_occurrence + payer_plan_period + visit_cost).
+"""VISIT 도메인 (visit_occurrence + payer_plan_period + visit_cost) 생성.
 
-원본: ``visit/visit_join.sas``.
 visit_occurrence_id 채번 시 만든 일련번호(nn)/연월일을 payer_plan_period_id,
 visit_cost_id 채번에 재사용한다.
 """
@@ -123,7 +122,7 @@ def _add_preceding_visit(vo: pd.DataFrame) -> pd.DataFrame:
     """preceding_visit_occurrence_id 계산.
 
     환자별로 visit_start_date 정렬 후, 직전 방문의 종료일이 현재 시작일 이전이면
-    그 방문 id 를 직전 방문으로 기록(아니면 0). 원본 SAS retain/lag 로직 대응.
+    그 방문 id 를 직전 방문으로 기록(아니면 0).
     """
     vo = vo.sort_values(["person_id", "visit_start_date", "visit_end_date"]).reset_index(drop=True)
     prev_id = vo["visit_occurrence_id"].shift()

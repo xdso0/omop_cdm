@@ -1,6 +1,5 @@
 """CONDITION_OCCURRENCE 도메인.
 
-원본: ``condition/condition_join.sas``.
 버전 통합 → visit 2단계 매칭 → 컷오프 → 채번 → 사망후 제거 →
 대상자 필터 → person 정합성 검증 → 저장.
 """

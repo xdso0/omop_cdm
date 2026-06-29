@@ -1,17 +1,12 @@
 """OMOP 기본키(occurrence_id) 채번.
 
-SAS 원본의 ID 생성 규칙을 그대로 옮긴다::
+각 사건에 다음 규칙으로 정수 surrogate key 를 부여한다::
 
-    proc sort data=x; by <datetime>; run;
-    data y;
-        set x;
-        if <date>=lag(<date>) then n+1; else n=1;   /* 같은 날짜 안에서 1부터 증가 */
-        nn = zero-padded(n, width)
-        yy = (year-2000)  -> 2자리, mm/dd -> 2자리
-        id = int(cats(hosp, yy, mm, dd, <domain_code>, nn));
-    run;
-
-즉 ID = ``{hosp}{YY}{MM}{DD}{domain_code}{seq}`` 형태의 정수.
+    ID = {hosp}{YY}{MM}{DD}{domain_code}{seq}
+      - hosp        : 병원 구분(1=site1, 2=site2)
+      - YY/MM/DD    : 발생일(YY = year-2000)
+      - domain_code : 2자리 도메인 코드
+      - seq         : 같은 날짜 안에서 1부터 증가하는 일련번호(zero-pad)
 
 도메인별 ``domain_code`` / ``seq_width``:
 
@@ -23,7 +18,7 @@ condition       "02"          5
 drug            "03"          5
 procedure       "04"          6
 measurement     "05"          6
-observation     "06"          6 (원본은 5; config 참조)
+observation     "06"          6
 payer_plan      "07"          5
 visit_cost      "08"          5   (※ 순서가 다름, 아래 참조)
 note            "09"          6
@@ -87,7 +82,7 @@ def assign_visit_cost_id(
 ) -> pd.Series:
     """VISIT_COST 전용 ID.
 
-    원본은 ``cats(m_yy, m_mm, m_dd, '08', hosp, nn)`` 으로 **순서가 다르다**
+    VISIT_COST 는 ``{YY}{MM}{DD}08{hosp}{nn}`` 으로 **순서가 다르다**
     (hosp 가 코드 뒤에 옴). visit 도메인에서 이미 계산된 ``nn`` 을 재사용한다.
     """
     d = pd.to_datetime(df[date_col])
@@ -103,8 +98,7 @@ def filter_person_id_length(
 ) -> pd.DataFrame:
     """PERSON_ID 자리수 필터.
 
-    SAS ``pip = lengthn(compress(put(PERSON_ID, 8.))); if pip=8;`` 대응.
-    유효한 환자번호는 8자리 정수만 남긴다.
+    유효 환자번호(8자리 정수)만 남긴다.
     """
     pid = pd.to_numeric(df[person_col], errors="coerce")
     keep = pid.notna() & (pid == pid.astype("Int64").astype("float"))

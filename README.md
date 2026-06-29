@@ -1,9 +1,9 @@
 # omop-cdm-etl
 
-EMR/OCS 원천 데이터를 **OMOP CDM (v5.x)** 으로 변환하는 ETL.
+EMR/OCS 원천 데이터를 **OMOP CDM (v5.x)** 으로 변환·생성하는 ETL 패키지.
 
-SAS(`*_join.sas` 통합 + 버전별 `step01.sas` 등 전처리) 로직을 재사용 가능한
-**Python 패키지**로 구조화했다.
+원천 데이터(`mapping_root`)와 Athena vocabulary 를 입력으로 받아, 도메인별 CDM
+테이블을 생성한다. 데이터 생성의 모든 규칙은 이 코드(`omop_etl/`)에 정의돼 있다.
 
 ## 1. 디렉터리 구조
 
@@ -14,7 +14,7 @@ omop-cdm-etl/
 ├── config/
 │   └── pipeline.yaml          # 경로 / 버전목록 / 채번코드 / 컷오프 설정
 ├── omop_etl/
-│   ├── io.py                  # SAS·Excel·CSV 입출력
+│   ├── io.py                  # 원천(sas7bdat)·Excel·CSV 입출력
 │   ├── ids.py                 # OMOP occurrence_id 채번
 │   ├── visit_match.py         # 방문(visit) 매칭 (2단계 / 1단계)
 │   ├── person_filter.py       # 사망일/대상자 필터, person 마스터 검증
@@ -27,14 +27,14 @@ omop-cdm-etl/
 │   │   ├── condition.py  drug.py  procedure.py
 │   │   └── observation.py  note.py  measurement.py
 │   └── preprocessing/
-│       └── measurement_lab.py # 검사항목 raw→measurement (SAS 수백 개 템플릿 대체)
+│       └── measurement_lab.py # 검사항목 raw 엑셀 → measurement 변환
 ├── scripts/
 │   ├── run_pipeline.py        # 전체 파이프라인 실행기
 │   └── make_sample.py         # 실행 가능한 입력 예시 생성기
 ├── input/                     # 입력 구조 설명 + 실행 가능한 예시(input/sample)
 ├── output_example/            # 예시 입력으로 생성한 산출물(표준매핑/미매핑/used vocab)
 └── docs/
-    └── mapping_logic.md       # SAS → Python 매핑 상세 설명
+    └── mapping_logic.md       # 데이터 생성 로직 상세 설명
 ```
 
 ## 2. 설치
@@ -47,7 +47,7 @@ pip install -r requirements.txt
 
 ## 3. 사용법
 
-`config/pipeline.yaml` 의 `paths.mapping_root` 를 원본 `mappingTable` 폴더로 지정한 뒤:
+`config/pipeline.yaml` 의 `paths.mapping_root` 를 원천 데이터 폴더로 지정한 뒤:
 
 ```bash
 # 전체 파이프라인
@@ -62,8 +62,7 @@ python scripts/run_pipeline.py --domains person death visit condition
 
 ### 신규 연도(추출 배치) 추가
 
-원본 SAS 에서 `libname` 한 줄을 추가하던 것과 동일하게,
-`config/pipeline.yaml` 의 해당 도메인 `sources` 에 항목 한 줄만 추가하고
+신규 배치는 `config/pipeline.yaml` 의 해당 도메인 `sources` 에 항목 한 줄만 추가하고
 `cutoff_year` 를 갱신하면 된다.
 
 ```yaml
@@ -82,7 +81,8 @@ concept 만** 사용한다 (`omop_etl/vocabulary.py`).
   이미 표준이면 그대로, 아니면 `CONCEPT_RELATIONSHIP`의 `Maps to` 로 표준 변환.
 - 도메인별 규칙은 `config/pipeline.yaml` 의 `vocabulary.mappings` 에 정의
   (`source_col`, `source_vocabulary`, `concept_col`, `source_concept_col`).
-  - condition → `KCD7`, procedure → `Korean Revenue Code`, measurement → `LOINC` …
+  - condition → `KCD7`(`A020|...`→`A02.0` 변환 후 SNOMED 표준), measurement → `LOINC`.
+  - procedure·drug 의 수가/EDI 코드는 대응 표준 vocabulary 가 없어 자동 매핑하지 않는다(9절 참조).
 - **미매핑 코드**는 후속 작업용으로 `paths.unmapped_root` 에 저장
   (`<domain>_unmapped.csv`: 코드 / source_concept_id / 건수).
 - **사용한 vocabulary** 는 `paths.used_vocab_root` 에 CONCEPT/CONCEPT_RELATIONSHIP/
@@ -110,7 +110,7 @@ python scripts/run_pipeline.py --config input/sample/pipeline.sample.yaml \
 
 ## 6. 공통 ETL 패턴
 
-모든 도메인이 동일한 골격을 따른다 (SAS·Python 공통):
+모든 도메인이 동일한 골격을 따른다:
 
 1. **버전 통합** — 추출 배치별 원천 데이터셋을 union (`hosp`, rename/drop 적용)
 2. **방문 매칭** — 사건을 `visit_occurrence` 에 연결 (도메인별 규칙, `visit_match.py`)
@@ -123,22 +123,22 @@ python scripts/run_pipeline.py --config input/sample/pipeline.sample.yaml \
 
 도메인별 채번 코드 / 방문 매칭 규칙은 [`docs/mapping_logic.md`](docs/mapping_logic.md) 참조.
 
-## 7. 도메인 ↔ 원본 SAS 대응
+## 7. 도메인 ↔ 모듈 ↔ 생성 테이블
 
-| 도메인 | Python 모듈 | 원본 SAS |
-|--------|-------------|----------|
-| person | `domains/person.py` | `person/person_join.sas` |
-| death | `domains/death.py` | `death/death_join.sas` |
-| care_site | `domains/care_site.py` | `care_site/step02_care_site.sas` |
-| provider | `domains/provider.py` | `provider/provider.sas` |
-| visit (+payer_plan_period, +visit_cost) | `domains/visit.py` | `visit/visit_join.sas` |
-| condition_occurrence | `domains/condition.py` | `condition/condition_join.sas` |
-| drug_exposure | `domains/drug.py` | `drug/drug_join.sas` |
-| procedure_occurrence | `domains/procedure.py` | `procedure/procedure_join.sas` |
-| observation | `domains/observation.py` | `observation/observation_join.sas` |
-| note | `domains/note.py` | `note/script.sas` |
-| measurement | `domains/measurement.py` | `measurement/measurement_join.sas` |
-| (검사 raw 전처리) | `preprocessing/measurement_lab.py` | `measurement/<버전>/script/*.sas` 수백 개 |
+| 도메인 | Python 모듈 | 생성 CDM 테이블 |
+|--------|-------------|-----------------|
+| person | `domains/person.py` | person (+ person_m) |
+| death | `domains/death.py` | death |
+| care_site | `domains/care_site.py` | care_site |
+| provider | `domains/provider.py` | provider |
+| visit | `domains/visit.py` | visit_occurrence, payer_plan_period, visit_cost |
+| condition | `domains/condition.py` | condition_occurrence |
+| drug | `domains/drug.py` | drug_exposure |
+| procedure | `domains/procedure.py` | procedure_occurrence |
+| observation | `domains/observation.py` | observation |
+| note | `domains/note.py` | note |
+| measurement | `domains/measurement.py` | measurement |
+| (검사 raw 전처리) | `preprocessing/measurement_lab.py` | measurement 입력 생성 |
 
 ## 8. 검증 (결과가 잘 만들어졌는지 확인)
 
@@ -152,16 +152,16 @@ python scripts/validate_cdm.py --config config/pipeline.yaml
 점검: PK 유일성·결측, person/visit 외래키 정합성, 표준 concept 매핑률,
 날짜 범위·사망일 이후 사건, 시작≤종료. ERROR 가 있으면 종료코드 1.
 
-**(2) 원본 SAS 결과와 대조** — Python 포팅이 기존 결과를 재현하는지
+**(2) 기존 산출물과 대조 (선택)** — 비교 기준이 될 기존 CDM 산출물(`.sas7bdat`/csv)이
+있으면 행 수·키·concept 분포·날짜 범위를 대조해 차이를 점검할 수 있다.
 
 ```bash
 python scripts/compare_with_sas.py \
     --python output/condition_occurrence.parquet \
-    --sas    <원본>/condition_occurrence.sas7bdat \
+    --sas    <기존산출물>/condition_occurrence.sas7bdat \
     --keys person_id condition_occurrence_id \
     --concept condition_concept_id --date condition_start_date
 ```
-행 수, 키 교집합/차집합, concept 분포 차이, 날짜 범위를 비교한다.
 
 **(3) 핵심 로직 단위 테스트**
 
@@ -171,7 +171,7 @@ python tests/test_core.py        # 또는: pytest
 채번·방문매칭·사망/마스터 필터·표준매핑이 기대값을 내는지 검증.
 
 > 권장 순서: 단위 테스트 → 샘플(`input/sample`)로 파이프라인+QC 통과 확인 →
-> 실제 데이터로 도메인 빌드 후 QC → 핵심 도메인은 SAS 결과와 대조.
+> 실제 데이터로 도메인 빌드 후 QC → (있으면) 기존 산출물과 대조.
 
 ## 9. 데이터 생성 한계
 

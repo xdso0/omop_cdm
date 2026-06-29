@@ -1,6 +1,5 @@
 """DRUG_EXPOSURE 도메인.
 
-원본: ``drug/drug_join.sas``.
 condition 과 거의 동일하나 ① quantity = quantity_days * days_supply 계산,
 ② 2단계 매칭 2차에서 9203 NULL 처리, ③ drug_concept_id 는 원천 conceptid 사용.
 """
