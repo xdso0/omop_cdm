@@ -52,6 +52,72 @@ def _dedup_visits(visits: pd.DataFrame, *, person_col: str, with_provider: bool)
     return v.drop_duplicates(subset=keys, keep="first")
 
 
+# 이벤트를 이 크기로 나눠 처리(방문 3천만 건 규모에서 전체 병합 메모리 폭발 방지)
+CHUNK_SIZE = 200_000
+
+
+def _best_per_event(
+    ev_chunk: pd.DataFrame,
+    vis: pd.DataFrame,
+    *,
+    date_col: str,
+    person_col: str,
+    provider_col: str | None,
+    window_pre_days: int,
+    order_by_diff: bool,
+    use_provider: bool,
+) -> pd.DataFrame:
+    """청크 내 각 이벤트의 최적 방문 1건 선택. 청크 환자의 방문만 병합한다."""
+    persons = ev_chunk[person_col].unique()
+    vsub = vis[vis[person_col].isin(persons)]
+    if vsub.empty:
+        return pd.DataFrame(columns=["_ev", "visit_occurrence_id", "visit_concept_id", "_provider_match"])
+
+    cols = ["_ev", person_col, date_col] + ([provider_col] if use_provider else [])
+    cand = ev_chunk[cols].merge(vsub, on=person_col, how="inner")
+    if cand.empty:
+        return pd.DataFrame(columns=["_ev", "visit_occurrence_id", "visit_concept_id", "_provider_match"])
+
+    d = pd.to_datetime(cand[date_col], errors="coerce")
+    vstart = pd.to_datetime(cand["visit_start_date"], errors="coerce")
+    vend = pd.to_datetime(cand["visit_end_date"], errors="coerce")
+    cand = cand[(vstart - pd.to_timedelta(window_pre_days, unit="D") <= d) & (d <= vend)].copy()
+    if cand.empty:
+        return pd.DataFrame(columns=["_ev", "visit_occurrence_id", "visit_concept_id", "_provider_match"])
+
+    d = pd.to_datetime(cand[date_col]); vend = pd.to_datetime(cand["visit_end_date"])
+    if use_provider:
+        cand["_provider_match"] = cand[provider_col].eq(cand["_v_provider"])
+    else:
+        cand["_provider_match"] = False
+    cand["_diff"] = (vend - d).dt.days
+
+    sort_cols, asc = ["_ev"], [True]
+    if use_provider:
+        sort_cols.append("_provider_match"); asc.append(False)
+    sort_cols.append("visit_concept_id"); asc.append(True)
+    if order_by_diff:
+        sort_cols.append("_diff"); asc.append(True)
+    cand = cand.sort_values(sort_cols, ascending=asc)
+    return cand.drop_duplicates("_ev", keep="first")[
+        ["_ev", "visit_occurrence_id", "visit_concept_id", "_provider_match"]
+    ]
+
+
+def _match_chunked(ev, vis, *, date_col, person_col, provider_col, window_pre_days,
+                   order_by_diff, use_provider):
+    parts = []
+    for s in range(0, len(ev), CHUNK_SIZE):
+        parts.append(_best_per_event(
+            ev.iloc[s:s + CHUNK_SIZE], vis,
+            date_col=date_col, person_col=person_col, provider_col=provider_col,
+            window_pre_days=window_pre_days, order_by_diff=order_by_diff,
+            use_provider=use_provider,
+        ))
+    return pd.concat(parts, ignore_index=True) if parts else pd.DataFrame(
+        columns=["_ev", "visit_occurrence_id", "visit_concept_id", "_provider_match"])
+
+
 def match_visit_two_pass(
     events: pd.DataFrame,
     visits: pd.DataFrame,
@@ -63,37 +129,23 @@ def match_visit_two_pass(
     order_by_diff: bool = False,
     null_9203_pass2: bool = False,
 ) -> pd.DataFrame:
-    """2단계 방문 매칭. ``visit_occurrence_id``, ``visit_concept_id`` 컬럼을 붙여 반환."""
+    """2단계 방문 매칭. ``visit_occurrence_id``, ``visit_concept_id`` 컬럼을 붙여 반환.
+
+    메모리 보호를 위해 이벤트를 청크로 나눠 처리한다(결과는 동일).
+    """
     ev = events.reset_index(drop=True).copy()
     ev["_ev"] = np.arange(len(ev))
 
     vis = _dedup_visits(visits, person_col=person_col, with_provider=True)
     vis = vis.rename(columns={provider_col: "_v_provider"})
 
-    # 후보 = 같은 환자의 방문 전부 join 후 날짜구간으로 필터
-    cand = ev[["_ev", person_col, provider_col, date_col]].merge(
-        vis, on=person_col, how="left"
+    best = _match_chunked(
+        ev, vis, date_col=date_col, person_col=person_col, provider_col=provider_col,
+        window_pre_days=window_pre_days, order_by_diff=order_by_diff, use_provider=True,
     )
-    d = pd.to_datetime(cand[date_col])
-    vstart = pd.to_datetime(cand["visit_start_date"])
-    vend = pd.to_datetime(cand["visit_end_date"])
-    in_window = (vstart - pd.to_timedelta(window_pre_days, unit="D") <= d) & (d <= vend)
-    cand = cand[in_window].copy()
-
-    cand["_provider_match"] = cand[provider_col].eq(cand["_v_provider"])
-    cand["_diff"] = (vend.loc[cand.index] - d.loc[cand.index]).dt.days
-
-    # 순위: provider 일치 우선 → visit_concept_id 오름차순 → (옵션) 거리 오름차순
-    sort_cols = ["_ev", "_provider_match", "visit_concept_id"]
-    ascending = [True, False, True]
-    if order_by_diff:
-        sort_cols.append("_diff")
-        ascending.append(True)
-    cand = cand.sort_values(sort_cols, ascending=ascending)
-    best = cand.drop_duplicates("_ev", keep="first")
 
     # 2차(provider 불일치) 매칭에서 9203 은 NULL 처리
-    if null_9203_pass2:
+    if null_9203_pass2 and len(best):
         mask = (~best["_provider_match"]) & best["visit_concept_id"].eq(9203)
         best.loc[mask, "visit_occurrence_id"] = np.nan
 
@@ -116,16 +168,13 @@ def match_visit_single(
     ev["_ev"] = np.arange(len(ev))
 
     vis = _dedup_visits(visits, person_col=person_col, with_provider=True)
-    cand = ev[["_ev", person_col, date_col]].merge(vis, on=person_col, how="left")
-    d = pd.to_datetime(cand[date_col])
-    vstart = pd.to_datetime(cand["visit_start_date"])
-    vend = pd.to_datetime(cand["visit_end_date"])
-    cand = cand[(vstart <= d) & (d <= vend)].copy()
 
-    cand = cand.sort_values(["_ev", "visit_concept_id"])
-    best = cand.drop_duplicates("_ev", keep="first")
+    best = _match_chunked(
+        ev, vis, date_col=date_col, person_col=person_col, provider_col=None,
+        window_pre_days=0, order_by_diff=False, use_provider=False,
+    )
 
-    if null_9203:
+    if null_9203 and len(best):
         best.loc[best["visit_concept_id"].eq(9203), "visit_occurrence_id"] = np.nan
 
     result = ev.merge(
