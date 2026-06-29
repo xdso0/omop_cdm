@@ -21,16 +21,37 @@ except ImportError:  # pragma: no cover
 
 # --------------------------------------------------------------------- #
 # 읽기
+# 한글 SAS 파일 인코딩 폴백 순서. 파일마다 euc-kr/cp949 가 섞여 있고
+# 일부는 잘못된 바이트가 있어, 주어진 인코딩 → cp949(상위호환) → 자동(None)
+# → latin1(최후, 무손실 바이트 매핑) 순으로 시도한다.
+def _encoding_candidates(encoding: str | None) -> list:
+    seq = [encoding, "cp949", "ms949", None, "latin1"]
+    seen, out = set(), []
+    for e in seq:
+        key = e or "__auto__"
+        if key not in seen:
+            seen.add(key); out.append(e)
+    return out
+
+
 # --------------------------------------------------------------------- #
 def read_sas(path: str | Path, *, encoding: str = "euc-kr") -> pd.DataFrame:
     """SAS `.sas7bdat` 파일을 DataFrame 으로 읽는다.
 
-    한글이 포함된 데이터셋은 보통 ``euc-kr`` 로 저장돼 있다.
+    한글이 포함된 데이터셋은 보통 ``euc-kr``/``cp949`` 로 저장돼 있다. 지정 인코딩이
+    실패하면 자동으로 다른 인코딩으로 재시도한다.
     """
     if pyreadstat is None:
         raise ImportError("pyreadstat 가 필요합니다: pip install pyreadstat")
-    df, _meta = pyreadstat.read_sas7bdat(str(path), encoding=encoding)
-    return df
+    last = None
+    for enc in _encoding_candidates(encoding):
+        try:
+            kw = {} if enc is None else {"encoding": enc}
+            df, _meta = pyreadstat.read_sas7bdat(str(path), **kw)
+            return df
+        except Exception as e:  # 인코딩 오류 시 다음 후보로
+            last = e
+    raise last
 
 
 def read_sas_chunks(
@@ -39,11 +60,20 @@ def read_sas_chunks(
     """대용량 `.sas7bdat`(수십 GB) 를 청크 단위로 읽는다."""
     if pyreadstat is None:
         raise ImportError("pyreadstat 가 필요합니다: pip install pyreadstat")
-    reader = pyreadstat.read_file_in_chunks(
-        pyreadstat.read_sas7bdat, str(path), chunksize=chunksize, encoding=encoding
-    )
-    for df, _meta in reader:
-        yield df
+    # 인코딩 후보를 순서대로 시도(첫 청크에서 실패하면 다음 후보)
+    last = None
+    for enc in _encoding_candidates(encoding):
+        try:
+            kw = {} if enc is None else {"encoding": enc}
+            reader = pyreadstat.read_file_in_chunks(
+                pyreadstat.read_sas7bdat, str(path), chunksize=chunksize, **kw
+            )
+            for df, _meta in reader:
+                yield df
+            return
+        except Exception as e:
+            last = e
+    raise last
 
 
 def read_excel(path: str | Path, sheet: str | int = 0, **kw) -> pd.DataFrame:
