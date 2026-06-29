@@ -59,7 +59,8 @@ def iter_source_chunks(cfg: PipelineConfig, domain, *, group=None, chunksize=500
             elif xlsx_path.exists():
                 chunks = [pd.read_excel(xlsx_path)]
             else:
-                raise FileNotFoundError(f"원천 없음: {sas_path} (.csv/.xlsx 도 없음)")
+                print(f"  [건너뜀] 원천 없음: {sas_path} (.csv/.xlsx 도 없음)")
+                continue
 
         for ch in chunks:
             ch = _normalize_columns(ch)

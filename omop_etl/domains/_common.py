@@ -185,7 +185,8 @@ def load_sources(
             elif xlsx_path.exists():
                 df = _pd.read_excel(xlsx_path)         # Excel 입력
             else:
-                raise FileNotFoundError(f"원천 없음: {sas_path} (.csv/.xlsx 도 없음)")
+                print(f"  [건너뜀] 원천 없음: {sas_path} (.csv/.xlsx 도 없음)")
+                continue
         df = _normalize_columns(df)          # 컬럼명 소문자 통일 (케이스 불일치 방지)
         df = _apply_options(df, src, encoding=cfg.sas_encoding)
         frames.append(df)
