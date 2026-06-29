@@ -31,6 +31,7 @@ EVENT_TABLE = {
     "procedure": "procedure_occurrence",
     "note": "note",
     "measurement": "measurement",
+    "observation": "observation",
 }
 
 
@@ -108,14 +109,25 @@ def build_event_stream(
     각 청크를 해당 도메인 ``build(source_override=chunk, id_counter=counter)`` 로
     처리하므로 in-memory 빌드와 동일한 변환을 거친다.
     """
-    from .domains import condition, drug, procedure, note, measurement
+    from .domains import condition, drug, procedure, note, measurement, observation
     builders = {"condition": condition.build, "drug": drug.build,
                 "procedure": procedure.build, "note": note.build,
-                "measurement": measurement.build}
+                "measurement": measurement.build, "observation": observation.build}
     builder = builders[name]
     sink = OutputSink(cfg, EVENT_TABLE[name])
     counter: dict = {}
     total = 0
+
+    if name == "observation":
+        # 종검/입원 두 그룹을 각각 청크 스트리밍(채번 카운터는 공유)
+        for grp in ("exam", "inpatient"):
+            for chunk in iter_source_chunks(cfg, cfg.domains[name], group=grp, chunksize=chunksize):
+                res = builder(cfg, person, death, visit, person_id_xlsx=person_id_xlsx,
+                              mapper=mapper, used_concept_ids=used_concept_ids,
+                              source_override=chunk, group=grp, id_counter=counter)
+                total += sink.write(res[0] if isinstance(res, tuple) else res)
+        return total
+
     for chunk in iter_source_chunks(cfg, cfg.domains[name], chunksize=chunksize):
         res = builder(cfg, person, death, visit, person_id_xlsx=person_id_xlsx,
                       mapper=mapper, used_concept_ids=used_concept_ids,

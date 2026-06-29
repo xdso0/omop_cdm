@@ -141,7 +141,7 @@ paths:
 
 ```yaml
 # 스트리밍으로 처리할 도메인(이벤트 도메인 모두 지원)
-stream_domains: ["condition", "drug", "procedure", "note", "measurement"]
+stream_domains: ["condition", "drug", "procedure", "observation", "note", "measurement"]
 chunksize: 500000                 # 청크 크기(행)
 ```
 

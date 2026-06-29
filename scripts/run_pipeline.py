@@ -133,16 +133,12 @@ def run(cfg: PipelineConfig, domains: list[str], provider_xlsx: str | None,
             else:
                 builder = {"condition": condition.build, "drug": drug.build,
                            "procedure": procedure.build, "note": note.build,
-                           "measurement": measurement.build}[dom]
+                           "measurement": measurement.build,
+                           "observation": observation.build}[dom]
                 df, _ = builder(cfg, need("person"), need("death"), need("visit"),
                                 person_id_xlsx=_pid_xlsx(cfg, dom),
                                 mapper=mapper, used_concept_ids=used_concept_ids)
                 _save(cfg, df, EVENT_TABLE[dom])
-
-        elif dom == "observation":
-            df, _ = observation.build(cfg, need("person"), need("death"), need("visit"),
-                                      person_id_xlsx=_pid_xlsx(cfg, "observation"))
-            _save(cfg, df, "observation")
 
         else:
             print(f"  (알 수 없는 도메인: {dom} — 건너뜀)")

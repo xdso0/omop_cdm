@@ -21,7 +21,7 @@ from ..person_filter import (
     remove_after_death,
     validate_against_person,
 )
-from ..ids import assign_occurrence_id
+from ..ids import assign_id
 from ..visit_match import match_visit_single
 from ._common import load_sources
 
@@ -33,22 +33,35 @@ def build(
     visit: pd.DataFrame,
     *,
     person_id_xlsx: str | Path,
+    mapper=None,
+    used_concept_ids: set | None = None,
+    source_override: pd.DataFrame | None = None,
+    group: str | None = None,
+    id_counter: dict | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     dom = cfg.domains["observation"]
-    exam = load_sources(dom, cfg, group="exam")
-    inpatient = load_sources(dom, cfg, group="inpatient")
 
-    # 입원 그룹만 visit 단일 매칭
-    inpatient = match_visit_single(inpatient, visit, date_col="observation_date", null_9203=True)
-    if "visit_occurrence_id" not in exam.columns:
-        exam["visit_occurrence_id"] = pd.NA
+    if source_override is not None:
+        # 스트리밍: 한 그룹의 청크. inpatient 만 visit 단일 매칭.
+        if group == "inpatient":
+            a = match_visit_single(source_override, visit, date_col="observation_date", null_9203=True)
+        else:
+            a = source_override.copy()
+            if "visit_occurrence_id" not in a.columns:
+                a["visit_occurrence_id"] = pd.NA
+    else:
+        exam = load_sources(dom, cfg, group="exam")
+        inpatient = load_sources(dom, cfg, group="inpatient")
+        inpatient = match_visit_single(inpatient, visit, date_col="observation_date", null_9203=True)
+        if "visit_occurrence_id" not in exam.columns:
+            exam["visit_occurrence_id"] = pd.NA
+        a = pd.concat([inpatient, exam], ignore_index=True)
 
-    a = pd.concat([inpatient, exam], ignore_index=True)
     a = apply_cutoff(a, date_col="observation_date", cutoff_year=dom.cutoff_year)
     a = a[a["PERSON_ID"].notna()]
 
-    a = assign_occurrence_id(
-        a,
+    a = assign_id(
+        a, id_counter,
         id_col="observation_id",
         datetime_col="observation_time",
         date_col="observation_date",
