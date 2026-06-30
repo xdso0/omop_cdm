@@ -117,7 +117,13 @@ def downcast_integers(df: pd.DataFrame) -> pd.DataFrame:
         if s.dtype != "float64" or s.isna().any():
             continue
         if len(s) and (s == s.round()).all():
-            df[c] = pd.to_numeric(s, downcast="integer")
+            name = str(c).lower()
+            if name == "person_id" or name.endswith("_id"):
+                # 조인 키/ID 는 int64 고정 — int32 로 줄이면 다른 프레임(int64)과
+                # merge 시 pandas 가 dtype 버퍼 오류를 낸다.
+                df[c] = s.astype("int64")
+            else:
+                df[c] = pd.to_numeric(s, downcast="integer")
     return df
 
 
