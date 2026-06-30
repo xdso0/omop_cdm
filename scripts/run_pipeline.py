@@ -119,7 +119,7 @@ def run(cfg: PipelineConfig, domains: list[str], provider_xlsx: str | None,
             cache["visit"] = res["visit_occurrence"].rename(columns={"person_id": "PERSON_ID"})
             _save(cfg, res["visit_occurrence"], "visit_occurrence")
             _save(cfg, res["payer_plan_period"], "payer_plan_period")
-            _save(cfg, res["visit_cost"], "visit_cost")
+            _save(cfg, res["cost"], "cost")
 
         elif dom in EVENT_TABLE:
             # 이벤트 도메인: stream_domains 에 있으면 청크 스트리밍, 아니면 in-memory

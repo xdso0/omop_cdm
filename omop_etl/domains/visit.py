@@ -1,7 +1,7 @@
-"""VISIT 도메인 (visit_occurrence + payer_plan_period + visit_cost) 생성.
+"""VISIT 도메인 (visit_occurrence + payer_plan_period + cost[5.3.1]) 생성.
 
 visit_occurrence_id 채번 시 만든 일련번호(nn)/연월일을 payer_plan_period_id,
-visit_cost_id 채번에 재사용한다.
+cost_id 채번에 재사용한다.
 """
 from __future__ import annotations
 
@@ -98,22 +98,24 @@ def build(
     }).drop_duplicates()
     payer_plan_period = select_columns(ppp, "payer_plan_period")
 
-    # ---- visit_cost (id 순서가 다름: YYMMDD 08 hosp nn) ----
-    vc = pd.DataFrame({
-        "visit_cost_id": (
+    # ---- cost (OMOP CDM 5.3.1 통합 비용 테이블; id 순서: YYMMDD 08 hosp nn) ----
+    cost = pd.DataFrame({
+        "cost_id": (
             b1["_yy"] + b1["_mm"] + b1["_dd"] + "08" + hosp.loc[b1.index] + b1["_nn"]
         ).astype("int64").values,
-        "visit_occurrence_id": b1["visit_occurrence_id"].values,
+        "cost_event_id": b1["visit_occurrence_id"].values,   # 비용이 연결된 visit
+        "cost_domain_id": "Visit",
+        "cost_type_concept_id": 0,
         "payer_plan_period_id": (
             hosp.loc[b1.index] + b1["_yy"] + b1["_mm"] + b1["_dd"] + "07" + b1["_nn"]
         ).astype("int64").values,
     }).drop_duplicates()
-    visit_cost = select_columns(vc, "visit_cost")
+    cost = select_columns(cost, "cost")
 
     return {
         "visit_occurrence": visit_occurrence,
         "payer_plan_period": payer_plan_period,
-        "visit_cost": visit_cost,
+        "cost": cost,
         "invalid_person_id": invalid,
     }
 
