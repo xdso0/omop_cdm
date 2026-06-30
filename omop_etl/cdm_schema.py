@@ -104,6 +104,21 @@ CDM_COLUMNS: dict[str, list[str]] = {
 }
 
 
+def natural_key(table: str) -> list[str]:
+    """중복 판정용 자연키 = surrogate PK(occurrence_id 등)를 뺀 나머지 컬럼.
+
+    person/death 처럼 첫 컬럼이 person_id(=실제 키)면 전체 컬럼으로 판정.
+    """
+    cols = CDM_COLUMNS[table]
+    pk = cols[0]
+    return list(cols) if pk == "person_id" else [c for c in cols if c != pk]
+
+
+def dedupe(df: pd.DataFrame, table: str) -> pd.DataFrame:
+    """자연키(=id 제외) 기준 중복 제거. 같은 사건이 id만 다른 채 중복된 것을 1건으로."""
+    return df.drop_duplicates(subset=natural_key(table)).reset_index(drop=True)
+
+
 def select_columns(df: pd.DataFrame, table: str, *, strict: bool = False) -> pd.DataFrame:
     """CDM 테이블의 표준 컬럼만, 표준 순서로 정렬해 반환한다.
 

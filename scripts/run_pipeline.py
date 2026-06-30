@@ -61,6 +61,9 @@ def _pid_xlsx(cfg: PipelineConfig, domain: str) -> Path:
 
 
 def _save(cfg: PipelineConfig, df, name: str) -> None:
+    from omop_etl.cdm_schema import dedupe, CDM_COLUMNS
+    if name in CDM_COLUMNS:
+        df = dedupe(df, name)          # 자연키 중복 제거(id만 다른 동일 사건 1건으로)
     if cfg.output_db:
         # 같은 CDM 테이블을 재실행 시 교체(replace), 그 외 도메인 산출은 append
         write_db(df, name, get_engine(cfg.output_db), schema=cfg.output_schema,
@@ -130,6 +133,11 @@ def run(cfg: PipelineConfig, domains: list[str], provider_xlsx: str | None,
                     person_id_xlsx=_pid_xlsx(cfg, dom),
                     mapper=mapper, used_concept_ids=used_concept_ids, chunksize=cfg.chunksize)
                 print(f"  저장(스트리밍): {EVENT_TABLE[dom]}  ({n:,} rows)")
+                if cfg.output_db:   # 청크 경계 넘는 중복을 DB 에서 정리
+                    from omop_etl.dedupe import dedupe_db_table
+                    d = dedupe_db_table(get_engine(cfg.output_db), EVENT_TABLE[dom],
+                                        schema=cfg.output_schema)
+                    print(f"    중복 제거: {d:,} 행 삭제")
             else:
                 builder = {"condition": condition.build, "drug": drug.build,
                            "procedure": procedure.build, "note": note.build,
