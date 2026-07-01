@@ -55,6 +55,7 @@ def apply_standard_mapping(
     unmapped_dir       : 미매핑 코드를 저장할 폴더 (None 이면 저장 안 함)
     used_concept_ids   : 사용된 concept_id 누적 집합 (vocab 정리용)
     """
+    df = df.copy()   # 슬라이스 대상 대비(SettingWithCopyWarning 방지)
     # 원천 코드를 (필요 시) 어휘 코드 형식으로 변환 후 매핑
     key = df[source_col].astype(str)
     if code_transform is not None:
